@@ -1,0 +1,16 @@
+{
+  "name": "musd-books",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Verifiable MUSD statements and invoice-referenced payments on Mezo",
+  "license": "MIT",
+  "scripts": {
+    "test:live": "node test/statement.live.test.mjs testnet",
+    "deploy": "node scripts/deploy.mjs",
+    "demo": "node scripts/demo.mjs"
+  },
+  "dependencies": {
+    "viem": "2.57.2"
+  }
+}
