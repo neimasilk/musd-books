@@ -23,7 +23,7 @@ Mezo lets people borrow MUSD against Bitcoin instead of selling it. A borrower, 
 | `docs/engine.js` | Dependency-free statement engine (browser and Node). Chunks `eth_getLogs` to the 10,000-block RPC limit, joins `PaymentReference` logs to transfers, classifies mint/burn/payment/transfer, produces the canonical CSV (`musdbooks-statement-v1`). |
 | `contracts/src/MusdPay.sol` | Pays an ERC-20 from payer to merchant with `transferFrom` and emits `PaymentReference` as the log **right after** the token's own `Transfer`. No owner, no fee, no custody, no upgrade path. `payWithPermit` makes it one transaction with MUSD (OpenZeppelin `ERC20Permit`). |
 | `contracts/src/StatementRegistry.sol` | Anyone can anchor a statement hash for an `(account, token, block range)`. Several parties can attest the same hash. Verification is one view call. |
-| `docs/` | Static app (GitHub Pages, no build step): Statement, Verify, Payment request, How it works. |
+| `docs/` | Static app (GitHub Pages, no build step): Statement (with a live Trove panel), Verify, Payment request, How it works. |
 
 ### Invoice references without a memo precompile
 
@@ -42,6 +42,8 @@ The same `(chain, account, token, from_block, to_block, pay_contract)` always yi
 - **Mainnet, read only:** a busy MUSD account (the MUSD/BTC pool) reconciles with **0 unexplained** over thousands of blocks, and two independent builds produce byte-identical CSVs (`node test/statement.live.test.mjs mainnet 5000`).
 - **Mint/burn labelling** was checked on a mainnet account that receives MUSD mints.
 - **End to end on a fork of Mezo testnet** with the real MUSD contract: permit payment, approve-and-pay, a payment without reference, a supplier payment, mint, burn, two co-attestations of the same hash, and a byte-identical re-derivation (`scripts/demo.mjs --fork`).
+- **The "Pay with wallet" page, end to end on Mezo Testnet** (`python test/wallet_flow_test.py`): a scripted EIP-1193 wallet drives the real page against the real `MusdPay` and MUSD contracts. Permit path: one transaction. Fallback path (permit signing unavailable): approve, then pay. Each leaves exactly one `PaymentReference` on chain. Running it found and fixed two real problems: the button was clickable before its handler existed, and the public RPC's gas estimate can fall below the EIP-7623 floor, so every wallet transaction now carries an explicit gas margin.
+- **Mezo Trove panel** (`node test/trove.live.test.mjs`): reads the account's Trove (collateral, debt, interest, collateral ratio) live from `TroveManager` and the price feed, checked against a real testnet Trove and a mainnet one (`ICR = collateral value / debt`). It is shown next to the statement and is not part of the hashed CSV, so existing anchors stay valid.
 - **Foundry unit tests:** 13 tests for `MusdPay` (log order, permit, already-used permit, tokens that return nothing, bad inputs) and `StatementRegistry`.
 
 ## Run locally

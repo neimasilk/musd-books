@@ -41,6 +41,8 @@ export const MEZO_TESTNET = {
     MUSD: { address: '0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503', symbol: 'MUSD', decimals: 18 },
   },
   core: CORE_TESTNET,
+  troveManager: '0xE47c80e8c23f6B4A1aE41c34837a0599D5D16bb0',
+  priceFeed: '0x86bCF0841622a5dAC14A313a15f96A95421b9366',
   // Filled in by the app config after deployment.
   payAddress: null,
 };
@@ -55,6 +57,8 @@ export const MEZO_MAINNET = {
     MUSD: { address: '0xdD468A1DDc392dcdbEf6db6e34E89AA338F9F186', symbol: 'MUSD', decimals: 18 },
   },
   core: CORE_MAINNET,
+  troveManager: '0x94AfB503dBca74aC3E4929BACEeDfCe19B93c193',
+  priceFeed: '0xc5aC5A8892230E0A3e1c473881A2de7353fFcA88',
   payAddress: null,
 };
 
@@ -342,6 +346,36 @@ export function parseCsvHeader(text) {
     meta[k] = rest.join(',');
   }
   return meta;
+}
+
+const TROVE_STATUS = ['none', 'active', 'closed by owner', 'closed by liquidation', 'closed by redemption'];
+
+/**
+ * Live read of an account's Mezo Trove (the Bitcoin-backed MUSD loan), straight from TroveManager and the PriceFeed.
+ * These are current values: they are shown next to a statement but are NOT part of the hashed statement.
+ * Returns null when the network has no Trove contracts configured or the account never had a Trove.
+ */
+export async function getTroveSnapshot(rpc, net, account) {
+  if (!net.troveManager || !net.priceFeed || !isAddress(account)) return null;
+  const arg = account.toLowerCase().replace(/^0x/, '').padStart(64, '0');
+  const call = (to, data) => rpc('eth_call', [{ to, data }, 'latest']);
+  const words = (hexStr) => { const h = hexStr.replace(/^0x/, ''); return Array.from({ length: h.length / 64 }, (_, i) => BigInt('0x' + h.slice(i * 64, i * 64 + 64))); };
+  const statusCode = Number(words(await call(net.troveManager, '0x21e37801' + arg))[0]);
+  if (statusCode === 0) return null;
+  const [coll, principal, interest, pCollateral, pPrincipal, pInterest] = words(await call(net.troveManager, '0xb91af97c' + arg));
+  const rateBp = Number(words(await call(net.troveManager, '0x92b7659b' + arg))[0]);
+  const snap = { status: TROVE_STATUS[statusCode] || String(statusCode), active: statusCode === 1, coll: coll + pCollateral, principal: principal + pPrincipal, interest: interest + pInterest, rateBp };
+  snap.debt = snap.principal + snap.interest;
+  if (snap.active) {
+    try {
+      const price = words(await call(net.priceFeed, '0x0fdb11cf'))[0];
+      const icr = words(await call(net.troveManager, '0xd293c710' + arg + price.toString(16).padStart(64, '0')))[0];
+      snap.price = price;      // USD per BTC, 18 decimals
+      snap.icr = icr;          // collateral ratio, 1e18 = 100%
+      snap.collUsd = (snap.coll * price) / 10n ** 18n;
+    } catch (_) { /* oracle unavailable: leave price fields out */ }
+  }
+  return snap;
 }
 
 /** Find the first block with timestamp >= ts (binary search). */

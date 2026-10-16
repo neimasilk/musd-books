@@ -96,7 +96,7 @@
         <div class="pay-amount" id="payAmount"></div>
         <div class="muted">Reference: <b id="payRef"></b> · <span id="payNet"></span></div>
         <p class="muted">The payment goes through the <code>MusdPay</code> contract, which moves the tokens straight from you to the merchant and records the reference onchain right after the token's own transfer log. The reference then shows up next to the payment on the merchant's MUSD Books statement. MUSD supports permit, so this is a single transaction.</p>
-        <div class="actions"><button id="payBtn" class="btn">Pay with wallet</button></div>
+        <div class="actions"><button id="payBtn" class="btn" disabled>Pay with wallet</button></div>
         <div id="payStatus"></div>
       </div>
     </section>
@@ -163,6 +163,12 @@
           </div>
           <div class="muted">Statement hash (keccak256 of the canonical CSV)</div>
           <div class="mono" id="resHash"></div>
+        </div>
+
+        <div class="card hidden" id="troveBox">
+          <h2>Mezo Trove <span class="muted" style="font-weight:400">(live, from TroveManager and the price feed; not part of the hashed statement)</span></h2>
+          <div class="stats" id="troveStats"></div>
+          <p class="muted">A Trove is the Bitcoin-backed MUSD loan. Read next to the statement, it shows what is still owed against the BTC locked behind it: the mint rows above are loan draws, the burn rows are repayments.</p>
         </div>
 
         <div class="card">

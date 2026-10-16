@@ -4,7 +4,7 @@ import {
 } from 'https://cdn.jsdelivr.net/npm/viem@2.57.2/+esm';
 import {
   MEZO_TESTNET, MEZO_MAINNET, NETWORKS, createRpc, buildStatement, formatUnits,
-  isAddress, parseCsvHeader, blockAtOrAfter, getTokenInfo,
+  isAddress, parseCsvHeader, blockAtOrAfter, getTokenInfo, getTroveSnapshot,
 } from './engine.js';
 import { DEPLOYMENTS, isLive, REGISTRY_ABI, PAY_ABI, PERMIT_ABI } from './config.js';
 
@@ -40,6 +40,23 @@ const fmt2 = (v, dec) => {
   return (neg ? '-' : '') + ww + '.' + (f + '00').slice(0, 2) + (f.length > 2 ? '…' : '');
 };
 const notice = (kind, html) => `<div class="notice ${kind}">${html}</div>`;
+
+// The public RPC can lag behind in indexing receipts, so keep polling instead of failing on the first miss.
+async function waitReceipt(client, hash) {
+  let last;
+  for (let i = 0; i < 45; i++) {
+    try { return await client.waitForTransactionReceipt({ hash, timeout: 20_000, retryCount: 8 }); } catch (e) { last = e; await new Promise((r) => setTimeout(r, 2000)); }
+  }
+  throw last;
+}
+
+// The public RPC's gas estimate can fall below the EIP-7623 calldata floor (the node then rejects the transaction),
+// so estimate first and add a margin. If estimating fails, let the wallet do it.
+async function writeWithGas(client, params) {
+  let gas;
+  try { gas = (await client.estimateContractGas(params)) + 150_000n; } catch (_) { /* fall back to the wallet's own estimate */ }
+  return walletClient.writeContract(gas ? { ...params, gas } : params);
+}
 
 // ---------- tabs
 function showTab(name) {
@@ -169,6 +186,23 @@ function renderStatement(st) {
   $('anchorBtn').disabled = !live;
   $('anchorStatus').textContent = live ? '' : 'Registry not deployed on this network yet.';
   showAnchors(st.hash, $('existingAnchors'), s.chainId);
+  renderTrove(s);
+}
+
+async function renderTrove(s) {
+  const box = $('troveBox');
+  box.classList.add('hidden');
+  try {
+    const t = await getTroveSnapshot(rpcFor(s.chainId), NETWORKS[s.chainId], s.account);
+    if (!t) return;
+    const pct = (v) => (Number(v) / 1e16).toFixed(2) + '%';
+    const stat = (k, v, sub = '') => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div>${sub ? `<div class="s">${sub}</div>` : ''}</div>`;
+    const debt = t.debt;
+    let html = stat('Status', esc(t.status)) + stat('Collateral', formatUnits(t.coll, 18).slice(0, 10) + ' BTC', t.collUsd ? '≈ $' + fmt2(t.collUsd, 18) : '') + stat('Debt', fmt2(debt, 18) + ' MUSD', `principal ${fmt2(t.principal, 18)} + interest ${formatUnits(t.interest, 18).slice(0, 8)} · ${(t.rateBp / 100).toFixed(2)}% a year`);
+    if (t.icr) html += stat('Collateral ratio', pct(t.icr), `liquidation below 110% · BTC would have to fall ${((1 - 1.1 / (Number(t.icr) / 1e18)) * 100).toFixed(1)}%`);
+    $('troveStats').innerHTML = html;
+    box.classList.remove('hidden');
+  } catch (_) { /* a Trove panel is optional */ }
 }
 
 function download(name, text) {
@@ -222,12 +256,12 @@ $('anchorBtn').addEventListener('click', async () => {
     $('anchorBtn').disabled = true;
     await connect(s.chainId);
     $('anchorStatus').textContent = 'Confirm in your wallet…';
-    const hash = await walletClient.writeContract({
+    const hash = await writeWithGas(clients[s.chainId], {
       account: walletAccount, address: dep(s.chainId).registry, abi: REGISTRY_ABI, functionName: 'anchor',
       args: [current.hash, getAddress(s.account), getAddress(s.token), BigInt(s.fromBlock), BigInt(s.toBlock), label],
     });
     $('anchorStatus').innerHTML = 'Submitted ' + txLink(hash, NETWORKS[s.chainId]) + ' — waiting…';
-    const rc = await clients[s.chainId].waitForTransactionReceipt({ hash });
+    const rc = await waitReceipt(clients[s.chainId], hash);
     $('anchorStatus').innerHTML = rc.status === 'success' ? '✔ Anchored in ' + txLink(hash, NETWORKS[s.chainId]) : 'Transaction reverted ' + txLink(hash, NETWORKS[s.chainId]);
     showAnchors(current.hash, $('existingAnchors'), s.chainId);
   } catch (e) {
@@ -317,7 +351,6 @@ async function setupPay(params) {
   $('payAmount').textContent = `${amount} ${info.symbol}`;
   const payAddr = dep(payNet.id).pay;
   if (!isLive(payAddr)) $('payStatus').innerHTML = notice('warn', 'The MusdPay contract is not deployed on this network yet.');
-  $('payBtn').disabled = !isLive(payAddr);
   $('payBtn').addEventListener('click', async () => {
     try {
       $('payBtn').disabled = true;
@@ -346,7 +379,7 @@ async function setupPay(params) {
         const r = '0x' + sig.slice(2, 66), s = '0x' + sig.slice(66, 130);
         let v = parseInt(sig.slice(130, 132), 16); if (v < 27) v += 27;
         $('payStatus').innerHTML = '<p class="muted">Confirm the payment in your wallet…</p>';
-        hash = await walletClient.writeContract({
+        hash = await writeWithGas(pub, {
           account: walletAccount, address: payAddr, abi: PAY_ABI, functionName: 'payWithPermit',
           args: [token, merchant, value, ref, deadline, v, r, s],
         });
@@ -358,14 +391,14 @@ async function setupPay(params) {
         const allowance = await pub.readContract({ address: token, abi: erc20Abi, functionName: 'allowance', args: [walletAccount, payAddr] });
         if (allowance < value) {
           $('payStatus').innerHTML = '<p class="muted">Step 1 of 2: approve in your wallet…</p>';
-          const ah = await walletClient.writeContract({ account: walletAccount, address: token, abi: erc20Abi, functionName: 'approve', args: [payAddr, value] });
-          await pub.waitForTransactionReceipt({ hash: ah });
+          const ah = await writeWithGas(pub, { account: walletAccount, address: token, abi: erc20Abi, functionName: 'approve', args: [payAddr, value] });
+          await waitReceipt(pub, ah);
         }
         $('payStatus').innerHTML = '<p class="muted">Confirm the payment in your wallet…</p>';
-        hash = await walletClient.writeContract({ account: walletAccount, address: payAddr, abi: PAY_ABI, functionName: 'pay', args: [token, merchant, value, ref] });
+        hash = await writeWithGas(pub, { account: walletAccount, address: payAddr, abi: PAY_ABI, functionName: 'pay', args: [token, merchant, value, ref] });
       }
       $('payStatus').innerHTML = `<p class="muted">Submitted ${txLink(hash, payNet)} — waiting…</p>`;
-      const rc = await pub.waitForTransactionReceipt({ hash });
+      const rc = await waitReceipt(pub, hash);
       $('payStatus').innerHTML = rc.status === 'success'
         ? notice('ok', `✔ Paid. Transaction ${txLink(hash, payNet)}. The reference is recorded onchain and will appear on the merchant's statement.`)
         : notice('bad', `Transaction reverted: ${txLink(hash, payNet)}`);
@@ -375,6 +408,8 @@ async function setupPay(params) {
       $('payBtn').disabled = false;
     }
   });
+  // Enabled only now that the click handler exists (it used to be clickable before that, and the click did nothing).
+  $('payBtn').disabled = !isLive(payAddr);
   return true;
 }
 
