@@ -15,7 +15,7 @@ MUSD integration: real MUSD (OpenZeppelin ERC20Permit), real Trove flows (openTr
 
 **Tech stack:** Solidity 0.8.30 (Foundry, london EVM), JavaScript (no framework, no backend), viem, GitHub Pages.
 
-**Track:** Track 2 (Access and Distribution). It also touches Track 1 only lightly, so submit to Track 2.
+**Track:** Track 2 (Access and Distribution)
 
 **Chain deployed on:** Mezo (testnet, chain id 31611)
 
