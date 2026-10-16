@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MUSD Books: deck</title>
+<link rel="icon" type="image/png" href="../assets/favicon.png" />
+<style>
+  :root { --bg:#0b1220; --panel:#121c33; --ink:#eef2fa; --muted:#9fb0cf; --teal:#2dbeaa; --orange:#f7931a; --line:#243252; }
+  * { box-sizing: border-box; }
+  html { scroll-snap-type: y mandatory; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:18px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  section { min-height:100vh; scroll-snap-align:start; padding:7vh 8vw; display:flex; flex-direction:column; justify-content:center; border-bottom:1px solid var(--line); }
+  h1 { font-size:clamp(34px,6vw,64px); margin:0 0 12px; letter-spacing:-.02em; }
+  h2 { font-size:clamp(26px,4vw,40px); margin:0 0 18px; color:var(--teal); }
+  p, li { max-width:62ch; }
+  .muted { color:var(--muted); }
+  .big { font-size:clamp(20px,2.6vw,28px); color:var(--muted); max-width:34ch; }
+  .grid { display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); margin-top:12px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
+  .card b { color:var(--orange); }
+  .num { font-size:34px; font-weight:700; color:var(--teal); font-variant-numeric:tabular-nums; }
+  code { background:#1a2745; padding:1px 6px; border-radius:6px; font-size:.9em; }
+  a { color:var(--teal); } .mono { font-family:ui-monospace,Consolas,monospace; font-size:14px; word-break:break-all; }
+  .brand { display:flex; align-items:center; gap:16px; margin-bottom:18px; } .brand img { width:72px; height:72px; border-radius:18px; }
+  svg text { fill:#eef2fa; font:600 15px system-ui,sans-serif; } svg .s { fill:#9fb0cf; font-weight:400; font-size:13px; }
+  @media print { html { scroll-snap-type:none; } section { min-height:auto; page-break-after:always; border:0; } }
+</style>
+</head>
+<body>
+
+<section>
+  <div class="brand"><img src="../assets/icon-256.png" alt="logo" /><div class="muted">Mezo Buildathon · Wave 1 · Track 2: Access and Distribution</div></div>
+  <h1>MUSD Books</h1>
+  <p class="big">Verifiable books for MUSD: statements, invoice references and onchain proof.</p>
+  <p class="muted">Live on Mezo Testnet · open source (MIT) · <a href="https://neimasilk.github.io/musd-books/">neimasilk.github.io/musd-books</a></p>
+</section>
+
+<section>
+  <h2>The problem</h2>
+  <p>Mezo lets people <b>borrow MUSD against Bitcoin</b> instead of selling it, and MUSD is a stablecoin people can pay and get paid in. Three people then need the same record: the borrower, the business paid in MUSD, and their accountant or lender.</p>
+  <div class="grid">
+    <div class="card"><b>Explorers</b> show raw logs. Nobody can hand an auditor a log.</div>
+    <div class="card"><b>Spreadsheets</b> from one party prove nothing to another party.</div>
+    <div class="card"><b>A transfer has no invoice number</b>, so matching payments to orders is manual.</div>
+  </div>
+</section>
+
+<section>
+  <h2>What MUSD Books does</h2>
+  <div class="grid">
+    <div class="card"><b>Exact statement.</b> Every MUSD <code>Transfer</code> once, in <code>BigInt</code>, reconciled to the last unit against <code>balanceOf</code> at the opening and closing blocks.</div>
+    <div class="card"><b>Mezo-aware.</b> Mint = loan draw, burn = repayment. BorrowerOperations, StabilityPool, PCV and others are named.</div>
+    <div class="card"><b>Invoice references.</b> <code>MusdPay</code> attaches a reference to a payment. One transaction with permit.</div>
+    <div class="card"><b>Proof.</b> The CSV is deterministic. Its hash is anchored in <code>StatementRegistry</code>. Anyone can re-derive it from chain data.</div>
+  </div>
+</section>
+
+<section>
+  <h2>How it fits together</h2>
+  <svg viewBox="0 0 860 250" width="100%" role="img" aria-label="Architecture">
+    <rect x="10" y="20" width="190" height="70" rx="12" fill="#121c33" stroke="#243252"/><text x="30" y="52">Payer wallet</text><text class="s" x="30" y="72">permit + payWithPermit</text>
+    <rect x="270" y="20" width="190" height="70" rx="12" fill="#121c33" stroke="#2dbeaa"/><text x="290" y="52">MusdPay</text><text class="s" x="290" y="72">Transfer, then PaymentReference</text>
+    <rect x="530" y="20" width="190" height="70" rx="12" fill="#121c33" stroke="#243252"/><text x="550" y="52">MUSD (Mezo)</text><text class="s" x="550" y="72">ERC-20, 18 decimals, permit</text>
+    <rect x="270" y="150" width="190" height="70" rx="12" fill="#121c33" stroke="#f7931a"/><text x="290" y="182">Statement engine</text><text class="s" x="290" y="202">in the browser, no backend</text>
+    <rect x="10" y="150" width="190" height="70" rx="12" fill="#121c33" stroke="#243252"/><text x="30" y="182">Mezo RPC</text><text class="s" x="30" y="202">logs + balanceOf</text>
+    <rect x="530" y="150" width="190" height="70" rx="12" fill="#121c33" stroke="#2dbeaa"/><text x="550" y="182">StatementRegistry</text><text class="s" x="550" y="202">anchor, co-attest, verify</text>
+    <path d="M200 55H270M460 55H530M365 90V150M200 185H270M460 185H530" stroke="#9fb0cf" stroke-width="2" fill="none"/>
+  </svg>
+  <p class="muted">A reference can never attach to the wrong payment: the engine joins <code>PaymentReference</code> to the transfer by log position and requires payer, merchant and amount to match.</p>
+</section>
+
+<section>
+  <h2>Deep MUSD integration</h2>
+  <ul>
+    <li><b>Real MUSD</b> (OpenZeppelin <code>ERC20Permit</code>): single-transaction payments signed with EIP-2612.</li>
+    <li><b>Real Trove flows</b>: <code>openTrove</code>, <code>withdrawMUSD</code>, <code>repayMUSD</code> appear as <code>mint</code> and <code>burn</code> rows, with Mezo's own minimum-debt rule respected.</li>
+    <li><b>Any ERC-20</b>, so MEZO and Mezo-bridged tokens work too.</li>
+    <li><b>Mainnet-ready reading</b>: the same engine already reconciles real mainnet MUSD accounts with zero difference.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Live on Mezo Testnet</h2>
+  <div class="grid">
+    <div class="card"><div class="num">2,000</div>MUSD borrowed from a real Trove</div>
+    <div class="card"><div class="num">150</div>MUSD repaid (burned)</div>
+    <div class="card"><div class="num">4</div>payments with invoice references</div>
+    <div class="card"><div class="num">0</div>unexplained difference in both statements</div>
+    <div class="card"><div class="num">2×</div>the store's statement anchored (store + accountant)</div>
+  </div>
+  <p class="mono">StatementRegistry 0x431785e21f9224c53aa37108d14cfa865279d23c<br/>MusdPay 0x5fa72a1821254a49d7c0af692115a4dabe81921a</p>
+  <p><a href="https://neimasilk.github.io/musd-books/?account=0x21F5ae9d165a7E0EFDaf17A85c225713199eC439&from=16192210&to=16192312&net=testnet">Open the demo store's statement</a> · <a href="https://github.com/neimasilk/musd-books">Source code</a></p>
+</section>
+
+<section>
+  <h2>Why it is credible</h2>
+  <ul>
+    <li><b>Reproducible.</b> 13 Foundry unit tests, a read-only live test against Mezo mainnet, and an end-to-end script that ran on a fork and on testnet.</li>
+    <li><b>Deterministic.</b> Same inputs, same bytes. The CSV header holds everything needed to re-derive it.</li>
+    <li><b>Honest limits.</b> Bookkeeping aid, not tax advice. One token per statement. Native BTC gas is out of scope.</li>
+    <li><b>Prior art by the same author:</b> ArcBooks, the same idea on Arc, with a live mainnet deployment. MUSD Books is a new engine for Mezo's ERC-20 and Trove model.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Wave 2 plan</h2>
+  <div class="grid">
+    <div class="card"><b>Mainnet</b> deployment of the registry and <code>MusdPay</code>.</div>
+    <div class="card"><b>Accountant flow:</b> request, co-sign and share a statement link in one step.</div>
+    <div class="card"><b>Trove report:</b> collateral, debt and interest alongside MUSD movements for lenders.</div>
+    <div class="card"><b>Merchant kit:</b> embeddable "Pay with MUSD" button using <code>MusdPay</code>.</div>
+  </div>
+  <p class="muted">Built by Claude (Anthropic) for its human owner, who holds the accounts and submits the project. Disclosed in the README.</p>
+</section>
+
+</body>
+</html>
