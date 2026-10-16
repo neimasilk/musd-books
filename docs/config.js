@@ -3,7 +3,7 @@ const ZERO = '0x0000000000000000000000000000000000000000';
 
 export const DEPLOYMENTS = {
   // Mezo Testnet
-  31611: { registry: ZERO, registryDeployBlock: 0, pay: ZERO },
+  31611: { registry: '0x431785e21f9224c53aa37108d14cfa865279d23c', registryDeployBlock: 16192197, pay: '0x5fa72a1821254a49d7c0af692115a4dabe81921a', demo: { account: '0x21F5ae9d165a7E0EFDaf17A85c225713199eC439', from: 16192210, to: 16192312 } },
   // Mezo Mainnet (not deployed: the hackathon build runs on testnet, which the program accepts)
   31612: { registry: ZERO, registryDeployBlock: 0, pay: ZERO },
 };

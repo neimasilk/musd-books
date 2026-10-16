@@ -34,9 +34,22 @@ const pub = owner.pub;
 const M = (n) => parseUnits(String(n), 18);
 const fmt = (v) => formatUnits(v, 18);
 
+// The public RPC can lag behind in indexing receipts, so poll patiently instead of failing on the first miss.
+async function waitRc(hash) {
+  for (let i = 0; i < 45; i++) {
+    try { return await pub.waitForTransactionReceipt({ hash, timeout: 20_000, retryCount: 8 }); } catch (e) { await sleep(2000); }
+  }
+  throw new Error(`no receipt for ${hash}`);
+}
+
 async function send(who, label, p) {
+  if (!p.gas && p.abi) {
+    // The public RPC sometimes returns an estimate below the EIP-7623 calldata floor; pad it.
+    const est = await pub.estimateContractGas({ account: who.account, ...p });
+    p = { ...p, gas: est + 150_000n };
+  }
   const hash = await who.wallet.writeContract(p);
-  const rc = await pub.waitForTransactionReceipt({ hash });
+  const rc = await waitRc(hash);
   if (rc.status !== 'success') throw new Error(`${label} reverted: ${hash}`);
   console.log(`  ${label.padEnd(34)} block ${rc.blockNumber}  gas ${rc.gasUsed}  ${hash.slice(0, 18)}…`);
   return rc;
@@ -74,15 +87,25 @@ async function payWithPermit(who, merchant, amount, ref) {
   return send(who, `payWithPermit ${fmt(amount)} "${ref}"`, { address: PAY, abi: payAbi, functionName: 'payWithPermit', args: [MUSD, merchant, amount, ref, deadline, v, r, s] });
 }
 
+async function waitAllowance(who, amount) {
+  for (let i = 0; i < 40; i++) {
+    const a = await pub.readContract({ address: MUSD, abi: erc20Abi, functionName: 'allowance', args: [who.account.address, PAY] });
+    if (a >= amount) return;
+    await sleep(2000);
+  }
+  throw new Error('allowance not visible on the RPC node');
+}
+
 async function payWithApprove(who, merchant, amount, ref) {
   await send(who, `approve ${fmt(amount)}`, { address: MUSD, abi: erc20Abi, functionName: 'approve', args: [PAY, amount] });
+  await waitAllowance(who, amount);
   return send(who, `pay ${fmt(amount)} "${ref}"`, { address: PAY, abi: payAbi, functionName: 'pay', args: [MUSD, merchant, amount, ref] });
 }
 
 console.log(`owner ${owner.account.address}\nstore ${store.account.address}\nregistry ${REGISTRY}\nMusdPay ${PAY}`);
 let ownerBtc = await pub.getBalance({ address: owner.account.address });
 console.log(`owner BTC ${fmt(ownerBtc)}`);
-const startBlock = Number(await pub.getBlockNumber());
+const startBlock = args['start-block'] ? Number(args['start-block']) : Number(await pub.getBlockNumber());
 
 // 1. Borrow MUSD against test BTC (a Trove), unless the owner already holds enough MUSD.
 let musdBal = await pub.readContract({ address: MUSD, abi: erc20Abi, functionName: 'balanceOf', args: [owner.account.address] });
@@ -106,23 +129,43 @@ console.log(`owner MUSD ${fmt(musdBal)}`);
 // 2. Give the demo store a little BTC for gas.
 if ((await pub.getBalance({ address: store.account.address })) < parseUnits('0.0004', 18)) {
   const h = await owner.wallet.sendTransaction({ to: store.account.address, value: parseUnits('0.0008', 18) });
-  await pub.waitForTransactionReceipt({ hash: h });
+  await waitRc(h);
   console.log('  funded the store with 0.0008 BTC for gas');
 }
 
 // 3. Customer payments to the store with invoice references.
-const firstPaymentBlock = Number(await pub.getBlockNumber()) + 1;
-await payWithPermit(owner, store.account.address, M(25), 'INV-2026-0001');
-await payWithApprove(owner, store.account.address, M(40), 'INV-2026-0002');
-await payWithPermit(owner, store.account.address, parseUnits('12.5', 18), 'INV-2026-0003');
-await send(owner, 'plain transfer 5 (no reference)', { address: MUSD, abi: erc20Abi, functionName: 'transfer', args: [store.account.address, M(5)] });
+const firstPaymentBlock = args['first-payment-block'] ? Number(args['first-payment-block']) : Number(await pub.getBlockNumber()) + 1;
+// --resume continues after the owner's payments and the store's approve (a previous run stopped at the store's pay).
+if (!args.resume && !args['after-supplier']) {
+  await payWithPermit(owner, store.account.address, M(25), 'INV-2026-0001');
+  await payWithApprove(owner, store.account.address, M(40), 'INV-2026-0002');
+  await payWithPermit(owner, store.account.address, parseUnits('12.5', 18), 'INV-2026-0003');
+  await send(owner, 'plain transfer 5 (no reference)', { address: MUSD, abi: erc20Abi, functionName: 'transfer', args: [store.account.address, M(5)] });
+}
 // 4. The store pays a supplier.
-await payWithApprove(store, owner.account.address, M(10), 'PO-2026-0007');
-// 5. The owner repays part of the loan (burns MUSD).
-const lastRc = args.fork
-  ? await forkAsBorrowerOps('burn', [owner.account.address, M(100)])
-  : await send(owner, 'repayMUSD 100', { address: BORROWER_OPS, abi: bo, functionName: 'repayMUSD', args: [M(100), ZERO, ZERO] });
-const endBlock = Number(lastRc.blockNumber);
+if (args['after-supplier']) {
+  // payments are already done
+} else if (args.resume) {
+  await waitAllowance(store, M(10));
+  await send(store, `pay ${fmt(M(10))} "PO-2026-0007"`, { address: PAY, abi: payAbi, functionName: 'pay', args: [MUSD, owner.account.address, M(10), 'PO-2026-0007'] });
+} else {
+  await payWithApprove(store, owner.account.address, M(10), 'PO-2026-0007');
+}
+// 5. The owner borrows a little more and repays part of the loan. Mezo requires the remaining net debt to stay at or above
+//    the 1,800 MUSD minimum, so a partial repayment needs headroom first.
+let lastRc;
+if (args['after-repay']) {
+  // already repaid in an earlier run
+} else if (args.fork) {
+  await forkAsBorrowerOps('mint', [owner.account.address, M(200)]);
+  lastRc = await forkAsBorrowerOps('burn', [owner.account.address, M(150)]);
+} else {
+  // The public RPC's gas estimate for Trove operations can come back far too low, so set an explicit limit.
+  if (!args['after-withdraw']) await send(owner, 'withdrawMUSD 200 (borrow more)', { address: BORROWER_OPS, abi: bo, functionName: 'withdrawMUSD', args: [M(200), ZERO, ZERO], gas: 6_000_000n });
+  await sleep(4000);
+  lastRc = await send(owner, 'repayMUSD 150', { address: BORROWER_OPS, abi: bo, functionName: 'repayMUSD', args: [M(150), ZERO, ZERO], gas: 6_000_000n });
+}
+const endBlock = args['after-repay'] ? Number(args['end-block']) : Number(lastRc.blockNumber);
 
 // 6. Wait until the range is safely in the past, then build both statements.
 if (args.fork) await pub.request({ method: 'anvil_mine', params: ['0x3'] }); // anvil mines only on demand
@@ -147,8 +190,8 @@ const anchor = (who, label, st, hash) => send(who, `anchor ${label}`, {
   address: REGISTRY, abi: regAbi, functionName: 'anchor',
   args: [hash, st.summary.account, MUSD, BigInt(st.summary.fromBlock), BigInt(st.summary.toBlock), label],
 });
-await anchor(store, 'Demo Store Oct 2026', storeSt, storeHash);
-await anchor(owner, 'Accountant co-sign', storeSt, storeHash);
+if (!args['skip-store-anchor']) await anchor(store, 'Demo Store Oct 2026', storeSt, storeHash);
+if (!args['skip-cosign']) await anchor(owner, 'Accountant co-sign', storeSt, storeHash);
 await anchor(owner, 'Trove owner Oct 2026', ownerSt, ownerHash);
 
 // 8. Verify: anchors are readable and a fresh re-derivation is byte-identical.

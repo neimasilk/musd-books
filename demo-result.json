@@ -1,0 +1,15 @@
+{
+  "rpc": "https://rpc.test.mezo.org",
+  "store": {
+    "account": "0x21F5ae9d165a7E0EFDaf17A85c225713199eC439",
+    "from": 16192210,
+    "to": 16192312,
+    "hash": "0xc7165868a3dfa18e59e59e2720563f974341d7ead8dddaaa8dacde1988c1d5f4"
+  },
+  "owner": {
+    "account": "0x444156722777F12f29F789F04fe9EAA5e90B10a9",
+    "from": 16192202,
+    "to": 16192312,
+    "hash": "0x0dbdb7d87dd5e626650cc4ec1ed24f75c000b063a819184138ce38976e1ff288"
+  }
+}

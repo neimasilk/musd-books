@@ -1,0 +1,23 @@
+# musdbooks-statement-v1
+# chain_id,31611
+# account,0x21f5ae9d165a7e0efdaf17a85c225713199ec439
+# token,0x118917a40faf1cd7a13db0ef56c86de7973ac503
+# token_symbol,MUSD
+# token_decimals,18
+# pay_contract,0x5fa72a1821254a49d7c0af692115a4dabe81921a
+# from_block,16192210
+# to_block,16192312
+# opening_balance,0
+# closing_balance,72.5
+# total_in,82.5
+# total_out,10
+# minted_in,0
+# burned_out,0
+# unexplained,0
+# transfers,5
+block,tx_hash,log_index,direction,kind,counterparty,counterparty_label,amount,reference
+16192210,0x729f76e8d424434f948bb3163f4943d52e3b0be14ab7bfba02f94b2554b1a0d5,1,in,payment,0x444156722777f12f29f789f04fe9eaa5e90b10a9,,25,INV-2026-0001
+16192222,0xd668f38903dd6e29658f8fc5d62593e5be89ced07113552926b465766719615c,0,in,payment,0x444156722777f12f29f789f04fe9eaa5e90b10a9,,40,INV-2026-0002
+16192224,0x33f9946a9b30fbe399bcf0ff9f4cd1e6ab9438e38a1a8d437ff823f733f337e9,4,in,payment,0x444156722777f12f29f789f04fe9eaa5e90b10a9,,12.5,INV-2026-0003
+16192227,0x2658618a04d1dba6dddb9446e6e7e912cdabb5b008d72f9dc1cb8de4c28adb5d,0,in,transfer,0x444156722777f12f29f789f04fe9eaa5e90b10a9,,5,
+16192242,0x349595de08c61a47b422b2940c5649ab7d7b7520fcf0caf3b274a110ca6e26b5,0,out,payment,0x444156722777f12f29f789f04fe9eaa5e90b10a9,,10,PO-2026-0007
