@@ -201,7 +201,7 @@ async function balanceOf(rpc, token, account, block) {
  * `net.payAddress`, when set, is the MusdPay contract whose PaymentReference logs
  * attach an invoice reference to each payment.
  */
-export async function buildStatement(rpc, net, token, account, fromBlock, toBlock, { concurrency = 4, onProgress, info } = {}) {
+export async function buildStatement(rpc, net, token, account, fromBlock, toBlock, { concurrency = 4, onProgress, info, payAddress } = {}) {
   if (!isAddress(account)) throw new Error('Invalid address');
   if (!isAddress(token)) throw new Error('Invalid token');
   account = account.toLowerCase();
@@ -211,7 +211,8 @@ export async function buildStatement(rpc, net, token, account, fromBlock, toBloc
 
   info = info || (await getTokenInfo(rpc, token));
   const names = { ...(net.core || {}) };
-  const pay = net.payAddress ? net.payAddress.toLowerCase() : null;
+  const payRaw = payAddress !== undefined ? payAddress : net.payAddress;
+  const pay = payRaw && isAddress(payRaw) ? payRaw.toLowerCase() : null;
 
   const tasks = [];
   for (const [a, b] of chunkRange(fromBlock, toBlock)) {
@@ -298,7 +299,7 @@ export async function buildStatement(rpc, net, token, account, fromBlock, toBloc
   }
 
   const summary = {
-    chainId: net.id, account, token, symbol: info.symbol, decimals: info.decimals,
+    chainId: net.id, account, token, symbol: info.symbol, decimals: info.decimals, pay,
     fromBlock, toBlock, opening, closing, totalIn, totalOut, minted, burned, unexplained, count: rows.length,
   };
   return { summary, rows, csv: canonicalCsv(summary, rows) };
@@ -313,6 +314,7 @@ export function canonicalCsv(s, rows) {
     `# token,${s.token}`,
     `# token_symbol,${s.symbol}`,
     `# token_decimals,${s.decimals}`,
+    `# pay_contract,${s.pay || 'none'}`,
     `# from_block,${s.fromBlock}`,
     `# to_block,${s.toBlock}`,
     `# opening_balance,${f(s.opening)}`,

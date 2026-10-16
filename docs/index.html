@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MUSD Books: verifiable MUSD statements on Mezo</title>
+  <meta name="description" content="Exact, reconciled MUSD account statements for any Mezo address: borrowing and repayments labelled, invoice references on payments, and onchain-anchored proof for accountants and lenders." />
+  <link rel="icon" type="image/png" href="./assets/favicon.png" />
+  <meta property="og:title" content="MUSD Books" />
+  <meta property="og:description" content="Verifiable MUSD statements and invoice-referenced payments on Mezo." />
+  <meta property="og:image" content="./assets/cover-1200x630.png" />
+  <style>
+    :root {
+      --bg: #f4f6fb; --card: #ffffff; --ink: #0f172a; --muted: #64748b; --line: #e2e8f0;
+      --accent: #0f9d8a; --accent-ink: #ffffff; --brand: #f7931a; --ok: #047857; --ok-bg: #ecfdf5; --warn: #b45309; --warn-bg: #fffbeb;
+      --bad: #b91c1c; --bad-bg: #fef2f2; --code: #eef2f7;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0b1220; --card: #121c33; --ink: #e5e9f2; --muted: #94a3b8; --line: #243252;
+        --accent: #2dbeaa; --accent-ink: #0b1220; --brand: #f7931a; --ok: #34d399; --ok-bg: #062a20; --warn: #fbbf24; --warn-bg: #2a1f05;
+        --bad: #f87171; --bad-bg: #2a0b0b; --code: #1a2745;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    header { padding: 18px 16px 8px; max-width: 1100px; margin: 0 auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    header img { width: 38px; height: 38px; border-radius: 10px; }
+    header h1 { font-size: 22px; margin: 0; }
+    header .tag { color: var(--muted); font-size: 14px; }
+    header .spacer { flex: 1; }
+    main { max-width: 1100px; margin: 0 auto; padding: 0 16px 48px; }
+    nav { display: flex; gap: 6px; margin: 8px 0 16px; flex-wrap: wrap; }
+    nav button { border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 8px 14px; border-radius: 999px; cursor: pointer; font-size: 14px; }
+    nav button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-bottom: 16px; }
+    .card h2 { font-size: 17px; margin: 0 0 12px; }
+    label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+    input, select { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg); color: var(--ink); font: inherit; }
+    .row { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin-bottom: 12px; }
+    .btn { border: 0; background: var(--accent); color: var(--accent-ink); padding: 10px 16px; border-radius: 9px; font: inherit; font-weight: 600; cursor: pointer; }
+    .btn.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 13px; word-break: break-all; }
+    .stats { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin: 12px 0; }
+    .stat { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+    .stat .k { color: var(--muted); font-size: 12px; }
+    .stat .v { font-weight: 650; font-size: 16px; font-variant-numeric: tabular-nums; }
+    .stat .s { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    th, td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+    th { position: sticky; top: 0; background: var(--card); color: var(--muted); font-weight: 600; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .in { color: var(--ok); } .out { color: var(--bad); }
+    .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; background: var(--code); }
+    .pill.mint, .pill.burn { background: var(--warn-bg); color: var(--warn); }
+    .pill.payment { background: var(--ok-bg); color: var(--ok); }
+    .notice { padding: 10px 12px; border-radius: 10px; font-size: 14px; margin: 10px 0; }
+    .notice.ok { background: var(--ok-bg); color: var(--ok); }
+    .notice.warn { background: var(--warn-bg); color: var(--warn); }
+    .notice.bad { background: var(--bad-bg); color: var(--bad); }
+    progress { width: 100%; height: 8px; }
+    .hidden { display: none !important; }
+    a { color: var(--accent); }
+    code { background: var(--code); padding: 1px 5px; border-radius: 5px; }
+    footer { max-width: 1100px; margin: 0 auto; padding: 0 16px 32px; color: var(--muted); font-size: 13px; }
+    .pay-amount { font-size: 34px; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="./assets/icon-256.png" alt="MUSD Books logo" />
+    <h1>MUSD Books</h1>
+    <span class="tag">Exact, reconciled, verifiable MUSD statements on Mezo</span>
+    <span class="spacer"></span>
+    <button id="connectBtn" class="btn secondary">Connect wallet</button>
+  </header>
+
+  <main>
+    <nav role="tablist">
+      <button role="tab" data-tab="statement" aria-selected="true">Statement</button>
+      <button role="tab" data-tab="verify" aria-selected="false">Verify</button>
+      <button role="tab" data-tab="request" aria-selected="false">Payment request</button>
+      <button role="tab" data-tab="about" aria-selected="false">How it works</button>
+    </nav>
+
+    <!-- PAY (shown when opened from a payment link) -->
+    <section id="tab-pay" class="hidden">
+      <div class="card">
+        <h2>Payment request</h2>
+        <div class="muted">Pay to</div>
+        <div id="payTo" class="mono"></div>
+        <div class="pay-amount" id="payAmount"></div>
+        <div class="muted">Reference: <b id="payRef"></b> · <span id="payNet"></span></div>
+        <p class="muted">The payment goes through the <code>MusdPay</code> contract, which moves the tokens straight from you to the merchant and records the reference onchain right after the token's own transfer log. The reference then shows up next to the payment on the merchant's MUSD Books statement. MUSD supports permit, so this is a single transaction.</p>
+        <div class="actions"><button id="payBtn" class="btn">Pay with wallet</button></div>
+        <div id="payStatus"></div>
+      </div>
+    </section>
+
+    <!-- STATEMENT -->
+    <section id="tab-statement">
+      <div class="card">
+        <h2>Generate a statement</h2>
+        <p class="muted" id="demoLinks" style="margin-top:-6px"></p>
+        <div class="row">
+          <div style="grid-column: span 2"><label for="acct">Mezo address</label><input id="acct" placeholder="0x…" autocomplete="off" spellcheck="false" /></div>
+          <div><label for="network">Network</label>
+            <select id="network">
+              <option value="31611" selected>Mezo Testnet</option>
+              <option value="31612">Mezo Mainnet</option>
+            </select>
+          </div>
+          <div><label for="tokenSel">Token</label>
+            <select id="tokenSel">
+              <option value="MUSD" selected>MUSD</option>
+              <option value="custom">Other ERC-20…</option>
+            </select>
+          </div>
+        </div>
+        <div class="row hidden" id="tokenRow">
+          <div style="grid-column: span 2"><label for="tokenAddr">Token contract address</label><input id="tokenAddr" placeholder="0x…" spellcheck="false" /></div>
+        </div>
+        <div class="row">
+          <div><label for="preset">Period</label>
+            <select id="preset">
+              <option value="1h">Last hour</option>
+              <option value="24h" selected>Last 24 hours</option>
+              <option value="7d">Last 7 days</option>
+              <option value="dates">Custom dates (UTC)</option>
+              <option value="blocks">Custom block range</option>
+            </select>
+          </div>
+          <div><label for="idrRate">Optional: IDR per token (for the report export)</label><input id="idrRate" inputmode="decimal" placeholder="e.g. 16450" /></div>
+        </div>
+        <div class="row hidden" id="datesRow">
+          <div><label for="fromDate">From (UTC)</label><input id="fromDate" type="datetime-local" /></div>
+          <div><label for="toDate">To (UTC)</label><input id="toDate" type="datetime-local" /></div>
+        </div>
+        <div class="row hidden" id="blocksRow">
+          <div><label for="fromBlock">From block</label><input id="fromBlock" inputmode="numeric" /></div>
+          <div><label for="toBlock">To block</label><input id="toBlock" inputmode="numeric" /></div>
+        </div>
+        <div class="actions">
+          <button id="genBtn" class="btn">Generate statement</button>
+          <span id="genStatus" class="muted"></span>
+        </div>
+        <progress id="genProgress" class="hidden" value="0" max="1"></progress>
+      </div>
+
+      <div id="result" class="hidden">
+        <div class="card">
+          <h2>Statement</h2>
+          <div class="muted mono" id="resMeta"></div>
+          <div class="stats" id="resStats"></div>
+          <div id="reconcile"></div>
+          <div class="actions" style="margin: 10px 0 14px">
+            <button id="dlCanonical" class="btn">Download canonical CSV</button>
+            <button id="dlReport" class="btn secondary">Download report CSV (with IDR)</button>
+          </div>
+          <div class="muted">Statement hash (keccak256 of the canonical CSV)</div>
+          <div class="mono" id="resHash"></div>
+        </div>
+
+        <div class="card">
+          <h2>Anchor onchain</h2>
+          <p class="muted">Record this statement's hash in the <code>StatementRegistry</code>. Anyone can then verify that a CSV they receive is exactly the one you attested, and can re-derive it from chain data. An accountant or lender can co-attest the same hash.</p>
+          <div class="row"><div><label for="label">Label (optional, ≤ 96 bytes)</label><input id="label" placeholder="e.g. Toko Batik Sari: September 2026" /></div></div>
+          <div class="actions"><button id="anchorBtn" class="btn">Anchor statement</button><span id="anchorStatus" class="muted"></span></div>
+          <div id="existingAnchors"></div>
+        </div>
+
+        <div class="card">
+          <h2>Transfers</h2>
+          <div class="muted" id="tableNote"></div>
+          <div class="table-wrap" style="max-height: 520px">
+            <table>
+              <thead><tr><th>Block</th><th>Dir</th><th>Kind</th><th>Counterparty</th><th style="text-align:right" id="amtHead">Amount</th><th>Reference</th><th>Tx</th></tr></thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VERIFY -->
+    <section id="tab-verify" class="hidden">
+      <div class="card">
+        <h2>Verify a statement</h2>
+        <p class="muted">Drop in a canonical MUSD Books CSV. It is hashed locally and looked up in the onchain <code>StatementRegistry</code>. You can also re-derive the statement from Mezo chain data and compare it line by line, which proves the contents are true, not just unchanged.</p>
+        <div class="row"><div><label for="verifyFile">Canonical CSV file</label><input id="verifyFile" type="file" accept=".csv,text/csv" /></div></div>
+        <div id="verifyOut"></div>
+        <div class="actions"><button id="rederiveBtn" class="btn secondary hidden">Re-derive from chain and compare</button><span id="rederiveStatus" class="muted"></span></div>
+        <progress id="verifyProgress" class="hidden" value="0" max="1"></progress>
+      </div>
+    </section>
+
+    <!-- REQUEST -->
+    <section id="tab-request" class="hidden">
+      <div class="card">
+        <h2>Create a payment request</h2>
+        <p class="muted">Generate a link a customer can open to pay you in MUSD with an invoice reference attached. The reference appears next to the payment in your MUSD Books statement, so reconciliation is automatic.</p>
+        <div class="row">
+          <div style="grid-column: span 2"><label for="reqTo">Your Mezo address</label><input id="reqTo" placeholder="0x…" spellcheck="false" /></div>
+          <div><label for="reqAmount">Amount (MUSD)</label><input id="reqAmount" inputmode="decimal" placeholder="25.00" /></div>
+          <div><label for="reqRef">Reference</label><input id="reqRef" placeholder="INV-2026-0042" maxlength="64" /></div>
+        </div>
+        <div class="actions"><button id="reqBtn" class="btn">Create link</button></div>
+        <div id="reqOut"></div>
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section id="tab-about" class="hidden">
+      <div class="card">
+        <h2>Why MUSD needs its own books</h2>
+        <p>Mezo lets people borrow MUSD against their Bitcoin instead of selling it. That is useful, but it leaves an accounting gap: a borrower, a small business that gets paid in MUSD, and their accountant all need a clean, checkable record of what came in, what went out, what was borrowed and what was repaid. A block explorer shows raw logs. MUSD Books turns them into a statement that can be verified by someone who does not trust the sender.</p>
+        <h2>What a statement contains</h2>
+        <ul>
+          <li><b>Exact amounts.</b> Every <code>Transfer</code> of the token is counted once at full 18-decimal precision, using <code>BigInt</code>.</li>
+          <li><b>Reconciliation to the last unit.</b> <code>opening + in − out</code> is compared with the onchain balance at the end of the period (read with <code>balanceOf</code> at the exact opening and closing blocks). For a plain ERC-20 like MUSD the difference is zero, and the statement says so. A non-zero value would expose a rebasing or fee-on-transfer token.</li>
+          <li><b>Mezo-aware labels.</b> Tokens newly minted to the account are marked <code>mint</code> (for a Trove owner this is a loan draw; for protocol accounts it can be fee income) and tokens sent to the zero address are marked <code>burn</code> (for a Trove owner, a repayment). Core Mezo contracts such as BorrowerOperations, StabilityPool and PCV are named.</li>
+          <li><b>Invoice references.</b> Mezo has no memo precompile. <code>MusdPay</code> moves tokens with <code>transferFrom</code> and emits <code>PaymentReference</code> as the log immediately after the token's own <code>Transfer</code>. The statement joins the two by log position, requiring payer, merchant and amount to match.</li>
+          <li><b>Deterministic CSV.</b> The same address, token and block range always produce the same bytes, so the keccak256 hash identifies the statement.</li>
+        </ul>
+        <h2>Anchoring and verification</h2>
+        <p>The hash can be anchored in <code>StatementRegistry</code> (several parties can attest the same hash). Verification is one view call plus an optional re-derivation from public chain data. Nothing leaves your browser except RPC calls.</p>
+        <h2>Contracts</h2>
+        <p class="muted">StatementRegistry: <span class="mono" id="aboutRegistry"></span><br />MusdPay: <span class="mono" id="aboutPay"></span></p>
+        <p class="muted">MUSD Books is a bookkeeping aid, not tax or legal advice. Source: <a href="https://github.com/neimasilk/musd-books" target="_blank" rel="noreferrer">github.com/neimasilk/musd-books</a>. It extends the author's earlier project ArcBooks (Arc network).</p>
+      </div>
+    </section>
+  </main>
+  <footer>MUSD Books is open source (MIT). Built with AI assistance (Claude), disclosed in the README.</footer>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
