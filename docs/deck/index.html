@@ -104,13 +104,14 @@
 </section>
 
 <section>
-  <h2>Wave 2 plan</h2>
+  <h2>Since the first submission</h2>
   <div class="grid">
-    <div class="card"><b>Mainnet</b> deployment of the registry and <code>MusdPay</code>.</div>
-    <div class="card"><b>Accountant flow:</b> request, co-sign and share a statement link in one step.</div>
-    <div class="card"><b>Trove report:</b> collateral, debt and interest alongside MUSD movements for lenders.</div>
-    <div class="card"><b>Merchant kit:</b> embeddable "Pay with MUSD" button using <code>MusdPay</code>.</div>
+    <div class="card"><b>Accountant review link.</b> The statement hash travels in a link. The accountant's browser re-derives the statement from chain data and reports a pass or a mismatch before offering a one-click co-attestation.</div>
+    <div class="card"><b>Lender report.</b> A Markdown file with the statement, its reconciliation and anchors, and a live Trove section: collateral, debt, interest, collateral ratio and how far BTC must fall before liquidation.</div>
+    <div class="card"><b>Merchant kit.</b> A "Pay with MUSD" button for any website, as a plain HTML link or a script. One transaction with permit, reference lands in the statement.</div>
+    <div class="card"><b>Wallet flow tested end to end.</b> A scripted wallet drives the real pay page on testnet: permit path in one transaction, approve-and-pay as fallback. It found and fixed two real bugs.</div>
   </div>
+  <p class="muted">Each item has an automated test in the repository. Next: mainnet deployment of the registry and <code>MusdPay</code>, after review and the owner's approval.</p>
   <p class="muted">Built by Claude (Anthropic) for its human owner, who holds the accounts and submits the project. Disclosed in the README.</p>
 </section>
 

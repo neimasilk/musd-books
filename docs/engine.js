@@ -390,3 +390,56 @@ export async function blockAtOrAfter(rpc, ts, latest) {
   }
   return lo;
 }
+
+/**
+ * Markdown report for a lender or an accountant: statement summary, anchors, and (when the account has one) the Mezo Trove.
+ * The Trove part is a live reading taken when the report is generated. It is not part of the hashed statement.
+ */
+export function buildLenderReport({ net, summary: s, hash, anchors = [], trove = null, generatedAt = new Date(), reviewUrl = '' }) {
+  const d = s.decimals, f = (v) => formatUnits(v, d), sym = s.symbol || 'token';
+  const lines = [
+    `# ${sym} lender report`,
+    '',
+    `Generated ${generatedAt.toISOString()} by MUSD Books (a bookkeeping aid, not financial, tax or legal advice).`,
+    '',
+    `- Network: ${net.name} (chain ${s.chainId})`,
+    `- Account: ${s.account}`,
+    `- Token: ${sym} ${s.token}`,
+    `- Blocks: ${s.fromBlock} to ${s.toBlock} (${s.count} transfers)`,
+    '',
+    '## Statement',
+    '',
+    `- Opening balance: ${f(s.opening)} ${sym}`,
+    `- Money in: +${f(s.totalIn)} ${sym}${s.minted ? ` (of which newly minted, for a Trove owner a loan draw: ${f(s.minted)})` : ''}`,
+    `- Money out: -${f(s.totalOut)} ${sym}${s.burned ? ` (of which burned, for a Trove owner a repayment: ${f(s.burned)})` : ''}`,
+    `- Closing balance: ${f(s.closing)} ${sym}`,
+    `- Unexplained difference: ${f(s.unexplained)} ${sym}${s.unexplained === 0n ? ' (fully reconciled to the onchain balance)' : ' (NOT reconciled: this token moves balances without Transfer logs)'}`,
+    `- Statement hash (keccak256 of the canonical CSV): ${hash}`,
+    anchors.length
+      ? `- Anchored ${anchors.length} time(s) in the StatementRegistry: ${anchors.map((a) => `${a.attester} at block ${a.anchoredAt}${a.label ? ` ("${a.label}")` : ''}`).join('; ')}`
+      : '- Not anchored in the StatementRegistry yet.',
+    ...(reviewUrl ? [`- Independent check: open ${reviewUrl} to re-derive this statement from chain data and compare its hash.`] : []),
+    '',
+    '## Mezo Trove (live reading at generation time)',
+    '',
+  ];
+  if (!trove) {
+    lines.push('No Trove found for this account on this network.');
+  } else {
+    const btc = formatUnits(trove.coll, 18);
+    lines.push(
+      `- Status: ${trove.status}`,
+      `- Collateral: ${btc} BTC${trove.collUsd ? ` (about $${formatUnits(trove.collUsd, 18).replace(/(\.\d{2})\d+$/, '$1')} at the oracle price)` : ''}`,
+      `- Debt: ${formatUnits(trove.debt, 18)} MUSD (principal ${formatUnits(trove.principal, 18)} + interest ${formatUnits(trove.interest, 18)}), annual interest rate ${(trove.rateBp / 100).toFixed(2)}%`,
+    );
+    if (trove.icr) {
+      const icrPct = Number(trove.icr) / 1e16;
+      const fall = (1 - 1.1 / (Number(trove.icr) / 1e18)) * 100;
+      lines.push(`- Collateral ratio: ${icrPct.toFixed(2)}%. Liquidation applies below 110%, so BTC would have to fall about ${fall.toFixed(1)}% from the oracle price.`);
+    }
+    lines.push('', 'Read with the statement above: money minted to the account is a loan draw, money burned is a repayment.');
+  }
+  lines.push('', '## How to check this report', '', '- Statement: the hash above identifies a deterministic CSV that anyone can rebuild from public Mezo chain data.',
+    '- Trove: read it yourself from TroveManager and the price feed; it changes every block and with every BTC price move.', '');
+  return lines.join('\n');
+}

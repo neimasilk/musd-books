@@ -4,7 +4,7 @@ import {
 } from 'https://cdn.jsdelivr.net/npm/viem@2.57.2/+esm';
 import {
   MEZO_TESTNET, MEZO_MAINNET, NETWORKS, createRpc, buildStatement, formatUnits,
-  isAddress, parseCsvHeader, blockAtOrAfter, getTokenInfo, getTroveSnapshot,
+  isAddress, parseCsvHeader, blockAtOrAfter, getTokenInfo, getTroveSnapshot, buildLenderReport,
 } from './engine.js';
 import { DEPLOYMENTS, isLive, REGISTRY_ABI, PAY_ABI, PERMIT_ABI } from './config.js';
 
@@ -122,6 +122,7 @@ async function resolveRange() {
 }
 
 let current = null;
+let lastAnchors = [];
 let expectedHash = null; // set when the page is opened from a "share for review" link
 
 const HASH_RE = /^0x[0-9a-fA-F]{64}$/;
@@ -216,7 +217,8 @@ function renderStatement(st) {
   const live = isLive(dep(s.chainId).registry);
   $('anchorBtn').disabled = !live;
   $('anchorStatus').textContent = live ? '' : 'Registry not deployed on this network yet.';
-  showAnchors(st.hash, $('existingAnchors'), s.chainId);
+  lastAnchors = [];
+  showAnchors(st.hash, $('existingAnchors'), s.chainId).then((a) => { lastAnchors = a || []; });
   renderTrove(s);
 }
 
@@ -236,15 +238,30 @@ async function renderTrove(s) {
   } catch (_) { /* a Trove panel is optional */ }
 }
 
-function download(name, text) {
+function download(name, text, type = 'text/csv') {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
+  a.href = URL.createObjectURL(new Blob([text], { type }));
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 const baseName = () => `musdbooks_${current.summary.account.slice(0, 8)}_${current.summary.fromBlock}-${current.summary.toBlock}`;
 $('dlCanonical').addEventListener('click', () => current && download(baseName() + '.csv', current.csv));
+$('dlLender').addEventListener('click', async () => {
+  if (!current) return;
+  const s = current.summary;
+  $('dlLender').disabled = true;
+  try {
+    let trove = null;
+    try { trove = await getTroveSnapshot(rpcFor(s.chainId), NETWORKS[s.chainId], s.account); } catch (_) { /* report without a Trove section */ }
+    const q = new URLSearchParams({ account: s.account, from: s.fromBlock, to: s.toBlock, net: s.chainId === MEZO_MAINNET.id ? 'mainnet' : 'testnet', expect: current.hash });
+    if ($('tokenSel').value === 'custom') q.set('token', s.token);
+    const md = buildLenderReport({ net: NETWORKS[s.chainId], summary: s, hash: current.hash, anchors: lastAnchors, trove, reviewUrl: `${location.origin}${location.pathname}?${q}` });
+    download(baseName() + '_lender_report.md', md, 'text/markdown');
+  } finally {
+    $('dlLender').disabled = false;
+  }
+});
 $('dlReport').addEventListener('click', () => {
   if (!current) return;
   const d = current.summary.decimals;
@@ -365,7 +382,33 @@ $('reqBtn').addEventListener('click', () => {
   out.innerHTML = `<p>Share this link:</p><p class="mono"><a href="${esc(url)}">${esc(url)}</a></p>
     <div class="actions"><button class="btn secondary" id="copyReq">Copy link</button></div>`;
   $('copyReq').onclick = () => navigator.clipboard.writeText(url);
+  renderEmbedKit(out, { to, amount, ref, netName: q.get('net'), url });
 });
+
+// Merchant kit: a "Pay with MUSD" button the merchant can paste into any page. Two forms: plain HTML link, or the pay-button.js script.
+function renderEmbedKit(container, { to, amount, ref, netName, url }) {
+  const base = `${location.origin}${location.pathname.replace(/[^/]*$/, '')}`;
+  const linkSnippet = `<a href="${esc(url)}" target="_blank" rel="noopener" style="display:inline-block;padding:10px 18px;border-radius:8px;background:#f7931a;color:#1a1a1a;font:600 15px system-ui,sans-serif;text-decoration:none">Pay ${esc(amount)} MUSD</a>`;
+  const scriptSnippet = `<div data-musd-pay data-to="${esc(to)}" data-amount="${esc(amount)}" data-ref="${esc(ref)}" data-net="${esc(netName)}"></div>
+<script async src="${esc(base)}pay-button.js"></script>`;
+  const box = document.createElement('div');
+  box.id = 'embedKit';
+  box.innerHTML = `<h3 style="margin:18px 0 4px">Add it to your website</h3>
+    <p class="muted">Paste one of these into your page. Customers pay in one transaction and the reference lands in your statement.</p>
+    <div class="muted" style="margin:8px 0 4px">Preview</div><div id="embedPreview"></div>
+    <div class="muted" style="margin:12px 0 4px">Option 1: plain HTML link (no script)</div>
+    <textarea id="embedLink" class="mono" rows="3" readonly spellcheck="false"></textarea>
+    <div class="actions"><button class="btn secondary" id="copyEmbedLink">Copy HTML</button></div>
+    <div class="muted" style="margin:12px 0 4px">Option 2: script (renders the button for you)</div>
+    <textarea id="embedScript" class="mono" rows="3" readonly spellcheck="false"></textarea>
+    <div class="actions"><button class="btn secondary" id="copyEmbedScript">Copy HTML</button></div>`;
+  container.appendChild(box);
+  $('embedPreview').innerHTML = linkSnippet;
+  $('embedLink').value = linkSnippet;
+  $('embedScript').value = scriptSnippet;
+  $('copyEmbedLink').onclick = () => navigator.clipboard.writeText($('embedLink').value);
+  $('copyEmbedScript').onclick = () => navigator.clipboard.writeText($('embedScript').value);
+}
 
 async function setupPay(params) {
   const to = params.get('pay'), amount = params.get('amount'), ref = params.get('ref') || '';
