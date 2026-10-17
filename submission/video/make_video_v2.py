@@ -101,6 +101,11 @@ def record(starts, durs, total):
             y = page.evaluate("(s) => document.querySelector(s).getBoundingClientRect().top + window.scrollY", sel)
             scroll_to(max(0, y - offset), ms)
 
+        def scroll_h2(text, ms=1200, offset=30):
+            y = page.evaluate("""(t) => { const h = Array.from(document.querySelectorAll('h2')).find((e) => e.textContent.includes(t));
+                return h.getBoundingClientRect().top + window.scrollY; }""", text)
+            scroll_to(max(0, y - offset), ms)
+
         def zoom(z=1.18):
             page.evaluate(f"document.documentElement.style.zoom='{z}'")
 
@@ -152,11 +157,11 @@ def record(starts, durs, total):
         wait_until(starts[5])
         page.goto(DECK, wait_until="load")
         page.wait_for_selector("h2:has-text('Since the first submission')")
-        scroll_el("h2:has-text('Since the first submission')", 1200, 30)
+        scroll_h2("Since the first submission")
 
         # v7: close on the live numbers slide
         wait_until(starts[6])
-        scroll_el("h2:has-text('Live on Mezo Testnet')", 1200, 30)
+        scroll_h2("Live on Mezo Testnet")
         wait_until(total)
         vid = page.video.path()
         ctx.close()
