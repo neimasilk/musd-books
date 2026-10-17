@@ -75,6 +75,7 @@
   <ul>
     <li><b>Real MUSD</b> (OpenZeppelin <code>ERC20Permit</code>): single-transaction payments signed with EIP-2612.</li>
     <li><b>Real Trove flows</b>: <code>openTrove</code>, <code>withdrawMUSD</code>, <code>repayMUSD</code> appear as <code>mint</code> and <code>burn</code> rows, with Mezo's own minimum-debt rule respected. A live <b>Trove panel</b> (collateral, debt, interest, collateral ratio) is read from <code>TroveManager</code> and the price feed.</li>
+    <li><b>Stability Pool</b>: the live position (deposit after liquidation losses, share of the pool, pending BTC gain from liquidated Troves) is read from the <code>StabilityPool</code> contract and added to the lender report. Validated with a real testnet deposit.</li>
     <li><b>Any ERC-20</b>, so MEZO and Mezo-bridged tokens work too.</li>
     <li><b>Mainnet-ready reading</b>: the same engine already reconciles real mainnet MUSD accounts with zero difference.</li>
   </ul>
@@ -96,7 +97,7 @@
 <section>
   <h2>Why it is credible</h2>
   <ul>
-    <li><b>Reproducible.</b> 13 Foundry unit tests, a read-only live test against Mezo mainnet, an end-to-end script that ran on a fork and on testnet, and a scripted-wallet test of the Pay page (permit and approve paths) on testnet.</li>
+    <li><b>Reproducible.</b> 27 Foundry tests (unit, fuzz and invariant, with a written self-review in SECURITY.md), a read-only live test against Mezo mainnet, an end-to-end script that ran on a fork and on testnet, and a scripted-wallet test of the Pay page (permit and approve paths) on testnet.</li>
     <li><b>Deterministic.</b> Same inputs, same bytes. The CSV header holds everything needed to re-derive it.</li>
     <li><b>Honest limits.</b> Bookkeeping aid, not tax advice. One token per statement. Native BTC gas is out of scope.</li>
     <li><b>Prior art by the same author:</b> ArcBooks, the same idea on Arc, with a live mainnet deployment. MUSD Books is a new engine for Mezo's ERC-20 and Trove model.</li>
@@ -110,6 +111,8 @@
     <div class="card"><b>Lender report.</b> A Markdown file with the statement, its reconciliation and anchors, and a live Trove section: collateral, debt, interest, collateral ratio and how far BTC must fall before liquidation.</div>
     <div class="card"><b>Merchant kit.</b> A "Pay with MUSD" button for any website, as a plain HTML link or a script. One transaction with permit, reference lands in the statement.</div>
     <div class="card"><b>Wallet flow tested end to end.</b> A scripted wallet drives the real pay page on testnet: permit path in one transaction, approve-and-pay as fallback. It found and fixed two real bugs.</div>
+    <div class="card"><b>Stability Pool position.</b> Next to the Trove, the app reads the account's deposit in the Mezo Stability Pool: value after liquidation losses, share of the pool and pending BTC gain. A deposit leaves the wallet balance, so this says what it is worth now. Checked with a real testnet deposit.</div>
+    <div class="card"><b>Security work.</b> 27 Foundry tests including fuzz and invariant suites (128,000 random calls each), a hook-token test, Slither (nothing high or medium) and a written self-review with severities and limits: SECURITY.md.</div>
   </div>
   <p class="muted">Each item has an automated test in the repository. Next: mainnet deployment of the registry and <code>MusdPay</code>, after review and the owner's approval.</p>
   <p class="muted">Built by Claude (Anthropic) for its human owner, who holds the accounts and submits the project. Disclosed in the README.</p>

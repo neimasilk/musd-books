@@ -23,7 +23,7 @@ Mezo lets people borrow MUSD against Bitcoin instead of selling it. A borrower, 
 | `docs/engine.js` | Dependency-free statement engine (browser and Node). Chunks `eth_getLogs` to the 10,000-block RPC limit, joins `PaymentReference` logs to transfers, classifies mint/burn/payment/transfer, produces the canonical CSV (`musdbooks-statement-v1`). |
 | `contracts/src/MusdPay.sol` | Pays an ERC-20 from payer to merchant with `transferFrom` and emits `PaymentReference` as the log **right after** the token's own `Transfer`. No owner, no fee, no custody, no upgrade path. `payWithPermit` makes it one transaction with MUSD (OpenZeppelin `ERC20Permit`). |
 | `contracts/src/StatementRegistry.sol` | Anyone can anchor a statement hash for an `(account, token, block range)`. Several parties can attest the same hash. Verification is one view call. |
-| `docs/` | Static app (GitHub Pages, no build step): Statement (with a live Trove panel), Verify, Payment request, How it works. |
+| `docs/` | Static app (GitHub Pages, no build step): Statement (with live Trove and Stability Pool panels), Verify, Payment request, How it works. |
 
 ### Invoice references without a memo precompile
 
@@ -46,7 +46,8 @@ The same `(chain, account, token, from_block, to_block, pay_contract)` always yi
 - **Accountant review link** (`python test/review_flow_test.py`, read only): after generating a statement, the app produces a link that carries its hash. The accountant's browser re-derives the statement from chain data and reports "Independent check passed" or "Hash mismatch" before offering a one-click co-attestation. The test covers a matching link, a hash changed by one digit, a malformed hash, and the link round trip.
 - **Lender report and merchant kit** (`python test/features_test.py`, `node test/report.test.mjs`): the statement page downloads a Markdown report for a lender (statement summary, reconciliation, anchors, a live Trove section with collateral ratio and how far BTC must fall before liquidation, and an independent-check link). The Request tab produces a "Pay with MUSD" button for a merchant's website, either as a plain HTML link or with `pay-button.js`; the test checks that both render, that the link opens the pay page with the right payee, amount and reference, and that invalid settings give a disabled button.
 - **Mezo Trove panel** (`node test/trove.live.test.mjs`): reads the account's Trove (collateral, debt, interest, collateral ratio) live from `TroveManager` and the price feed, checked against a real testnet Trove and a mainnet one (`ICR = collateral value / debt`). It is shown next to the statement and is not part of the hashed CSV, so existing anchors stay valid.
-- **Foundry unit tests:** 13 tests for `MusdPay` (log order, permit, already-used permit, tokens that return nothing, bad inputs) and `StatementRegistry`.
+- **Mezo Stability Pool panel** (`node test/pool.test.mjs`, `node test/pool.live.test.mjs`, `python test/features_test.py`): reads the account's Stability Pool position (deposit after liquidation losses, share of the pool, pending BTC gain from liquidated Troves) live from the `StabilityPool` contract. A deposit leaves the wallet balance, so a statement shows it as MUSD out to the pool; this panel says what it is worth now. Validated with a real 100 MUSD deposit on Mezo Testnet (`node scripts/pool_demo.mjs`, which found that the pool pulls MUSD with `transferFrom` and needs an approval first) and a read of the mainnet pool. The lender report gets a matching section. Like the Trove panel, it is not part of the hashed CSV.
+- **Foundry tests, 27 in total:** 13 unit tests for `MusdPay` (log order, permit, already-used permit, tokens that return nothing, bad inputs) and `StatementRegistry`, 11 property tests (log order and balances for any amount, an attacker cannot spend a victim's approval, garbage permits create no allowance, exact pagination and anchor round trips), 2 invariant suites (128,000 random calls each: the contract never holds tokens and supply is conserved; per-hash anchor counts always match), and a hook-token test that pins a documented edge case. Slither reports 3 informational results and nothing high or medium. See [SECURITY.md](SECURITY.md) for the findings and the limits of this self-review.
 
 ## Run locally
 
@@ -57,8 +58,12 @@ cd docs && python -m http.server 8765      # open http://127.0.0.1:8765
 # engine against Mezo mainnet (read only), or testnet
 node test/statement.live.test.mjs mainnet 5000
 
-# contracts
+# contracts (unit, property and invariant tests); build output is not committed, so run forge build before deploy.mjs or demo.mjs
 cd contracts && forge test
+
+# engine and report tests
+node test/pool.test.mjs && node test/report.test.mjs
+python test/features_test.py && python test/review_flow_test.py && python test/wallet_flow_test.py
 ```
 
 ## Deployments
@@ -75,10 +80,11 @@ See `deployments.json` (written by `scripts/deploy.mjs`) and `docs/config.js`.
 ## Repository layout
 
 ```
-contracts/   Foundry project: StatementRegistry.sol, MusdPay.sol + unit tests
+contracts/   Foundry project: StatementRegistry.sol, MusdPay.sol + unit, property and invariant tests
+SECURITY.md  What was checked, findings with severity, trust assumptions
 docs/        Static app (engine.js, app.js, config.js, index.html, assets/)
-scripts/     deploy.mjs, demo.mjs, lib.mjs, icon generator
-test/        Live read-only test of the statement engine
+scripts/     deploy.mjs, demo.mjs, pool_demo.mjs, lib.mjs, icon and screenshot generators
+test/        Engine, report, pool and browser tests (live read-only ones included)
 ```
 
 ## Limitations

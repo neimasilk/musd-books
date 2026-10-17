@@ -3,6 +3,8 @@
   A. Merchant kit: the Request tab produces a plain HTML snippet and a script snippet; both render a working "Pay with MUSD" button
      whose link opens the pay page with the right payee, amount and reference. Invalid settings render a disabled button.
   B. Lender report: the borrower's statement downloads a Markdown report with the statement hash, reconciliation, anchors and a live Trove section.
+  C. Stability Pool: the borrower made a real 100 MUSD deposit, so the statement page shows a pool card and the report has a pool section;
+     the store has no deposit, so its page shows no pool card.
 
 Usage: python test/features_test.py   (serves ../docs on 127.0.0.1:8768 itself)
 """
@@ -104,6 +106,18 @@ def main():
         check("report explains loan draw and repayment", "loan draw: 2000" in md.replace(",", "") and "repayment: 150" in md, md[:900])
         check("report has a live Trove section", "Status: active" in md and "Collateral ratio:" in md and "Liquidation applies below 110%" in md, md[md.find("## Mezo Trove"):][:700])
         check("report carries an independent-check link", "expect=" + h in md)
+
+        # ---- C. Stability Pool
+        pg2.wait_for_selector("#poolBox:not(.hidden)", timeout=60000)
+        pool_txt = pg2.inner_text("#poolStats")
+        check("pool card shows the deposit, the share of the pool and the pending BTC gain", re.search(r"100(\.0+)? MUSD", pool_txt) and "Share of pool" in pool_txt and "Pending BTC gain" in pool_txt, pool_txt)
+        check("report has a Stability Pool section with the deposit", "## Mezo Stability Pool" in md and "Deposit (after liquidation losses): 100 MUSD" in md, md[md.find("## Mezo Stability Pool"):][:500])
+        check("report explains that pooled MUSD is not spent", "is not spent" in md)
+        pg3 = b.new_page()
+        pg3.goto(BASE + f"index.html?account={STORE}&from=16192210&to=16192312&net=testnet")
+        pg3.wait_for_selector("#resHash:not(:empty)", timeout=120000)
+        pg3.wait_for_timeout(6000)  # give the optional pool read time to finish
+        check("an account without a deposit shows no pool card", pg3.locator("#poolBox.hidden").count() == 1)
         b.close()
     srv.shutdown()
     if fails:

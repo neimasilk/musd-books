@@ -1,0 +1,9 @@
+# AKINDO update 2 (paste at the end of the product's "Update" section, and replace the video link after upload)
+
+**Update 2, 17 Oct 2026, evening (during Wave 1)**
+
+Stability Pool position. Next to the Trove, the app now reads the account's position in the Mezo Stability Pool straight from the StabilityPool contract: the deposit after liquidation losses, its share of the pool and the pending BTC gain from liquidated Troves. A deposit leaves the wallet balance, so the statement shows it as MUSD out to the pool; this card says what that deposit is worth now. It is not part of the hashed CSV, so existing anchors stay valid, and the lender report has a matching section. Checked with a real 100 MUSD deposit on Mezo Testnet (the first attempt reverted with ERC20InsufficientAllowance: the pool pulls MUSD with transferFrom, so the script now approves first) and a read of the mainnet pool (node test/pool.live.test.mjs, python test/features_test.py).
+
+Security work. 27 Foundry tests: 13 unit tests, 11 property tests (log order and balances for any amount, an attacker cannot spend a victim's approval, garbage permits create no allowance, exact pagination and anchor round trips), two invariant suites with 128,000 random calls each (the contract never holds tokens and supply is conserved; per-hash anchor counts always match) and a hook-token test that documents one edge case. Slither 0.11.5 reports 3 informational results and nothing high or medium. SECURITY.md lists every finding with its severity, the limits of this self-review (it is not a professional audit) and how to reproduce each check: https://github.com/neimasilk/musd-books/blob/main/SECURITY.md
+
+New pitch video (version 2, about 1:50) covers everything added during Wave 1: the accountant review link, the Trove and Stability Pool panels, the lender report, the merchant kit and the tests.

@@ -4,7 +4,7 @@ import {
 } from 'https://cdn.jsdelivr.net/npm/viem@2.57.2/+esm';
 import {
   MEZO_TESTNET, MEZO_MAINNET, NETWORKS, createRpc, buildStatement, formatUnits,
-  isAddress, parseCsvHeader, blockAtOrAfter, getTokenInfo, getTroveSnapshot, buildLenderReport,
+  isAddress, parseCsvHeader, blockAtOrAfter, getTokenInfo, getTroveSnapshot, getStabilityPoolPosition, buildLenderReport,
 } from './engine.js';
 import { DEPLOYMENTS, isLive, REGISTRY_ABI, PAY_ABI, PERMIT_ABI } from './config.js';
 
@@ -220,6 +220,7 @@ function renderStatement(st) {
   lastAnchors = [];
   showAnchors(st.hash, $('existingAnchors'), s.chainId).then((a) => { lastAnchors = a || []; });
   renderTrove(s);
+  renderPool(s);
 }
 
 async function renderTrove(s) {
@@ -238,6 +239,21 @@ async function renderTrove(s) {
   } catch (_) { /* a Trove panel is optional */ }
 }
 
+async function renderPool(s) {
+  const box = $('poolBox');
+  box.classList.add('hidden');
+  try {
+    const p = await getStabilityPoolPosition(rpcFor(s.chainId), NETWORKS[s.chainId], s.account);
+    if (!p) return;
+    const stat = (k, v, sub = '') => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div>${sub ? `<div class="s">${sub}</div>` : ''}</div>`;
+    $('poolStats').innerHTML =
+      stat('Deposit', fmt2(p.deposit, 18) + ' MUSD', 'after liquidation losses') +
+      stat('Share of pool', p.sharePct.toFixed(4) + '%', `of ${fmt2(p.totalDeposits, 18)} MUSD`) +
+      stat('Pending BTC gain', formatUnits(p.collateralGain, 18).slice(0, 12) + ' BTC', 'from liquidated Troves');
+    box.classList.remove('hidden');
+  } catch (_) { /* a Stability Pool panel is optional */ }
+}
+
 function download(name, text, type = 'text/csv') {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([text], { type }));
@@ -252,11 +268,12 @@ $('dlLender').addEventListener('click', async () => {
   const s = current.summary;
   $('dlLender').disabled = true;
   try {
-    let trove = null;
+    let trove = null, pool = null;
     try { trove = await getTroveSnapshot(rpcFor(s.chainId), NETWORKS[s.chainId], s.account); } catch (_) { /* report without a Trove section */ }
+    try { pool = await getStabilityPoolPosition(rpcFor(s.chainId), NETWORKS[s.chainId], s.account); } catch (_) { /* report without a pool section */ }
     const q = new URLSearchParams({ account: s.account, from: s.fromBlock, to: s.toBlock, net: s.chainId === MEZO_MAINNET.id ? 'mainnet' : 'testnet', expect: current.hash });
     if ($('tokenSel').value === 'custom') q.set('token', s.token);
-    const md = buildLenderReport({ net: NETWORKS[s.chainId], summary: s, hash: current.hash, anchors: lastAnchors, trove, reviewUrl: `${location.origin}${location.pathname}?${q}` });
+    const md = buildLenderReport({ net: NETWORKS[s.chainId], summary: s, hash: current.hash, anchors: lastAnchors, trove, pool, reviewUrl: `${location.origin}${location.pathname}?${q}` });
     download(baseName() + '_lender_report.md', md, 'text/markdown');
   } finally {
     $('dlLender').disabled = false;

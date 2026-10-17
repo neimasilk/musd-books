@@ -173,6 +173,12 @@
           <p class="muted">A Trove is the Bitcoin-backed MUSD loan. Read next to the statement, it shows what is still owed against the BTC locked behind it: the mint rows above are loan draws, the burn rows are repayments.</p>
         </div>
 
+        <div class="card hidden" id="poolBox">
+          <h2>Mezo Stability Pool <span class="muted" style="font-weight:400">(live, from the StabilityPool contract; not part of the hashed statement)</span></h2>
+          <div class="stats" id="poolStats"></div>
+          <p class="muted">MUSD placed in the Stability Pool is not spent: it absorbs liquidations and earns the BTC collateral of liquidated Troves. It leaves the wallet balance, so the statement shows it as MUSD out to the pool; this card says what that deposit is worth now.</p>
+        </div>
+
         <div class="card">
           <h2>Anchor onchain</h2>
           <p class="muted">Record this statement's hash in the <code>StatementRegistry</code>. Anyone can then verify that a CSV they receive is exactly the one you attested, and can re-derive it from chain data. An accountant or lender can co-attest the same hash.</p>

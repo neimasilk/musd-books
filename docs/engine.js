@@ -43,6 +43,7 @@ export const MEZO_TESTNET = {
   core: CORE_TESTNET,
   troveManager: '0xE47c80e8c23f6B4A1aE41c34837a0599D5D16bb0',
   priceFeed: '0x86bCF0841622a5dAC14A313a15f96A95421b9366',
+  stabilityPool: '0x1CCA7E410eE41739792eA0A24e00349Dd247680e',
   // Filled in by the app config after deployment.
   payAddress: null,
 };
@@ -59,6 +60,7 @@ export const MEZO_MAINNET = {
   core: CORE_MAINNET,
   troveManager: '0x94AfB503dBca74aC3E4929BACEeDfCe19B93c193',
   priceFeed: '0xc5aC5A8892230E0A3e1c473881A2de7353fFcA88',
+  stabilityPool: '0x73245Eff485aB3AAc1158B3c4d8f4b23797B0e32',
   payAddress: null,
 };
 
@@ -378,6 +380,24 @@ export async function getTroveSnapshot(rpc, net, account) {
   return snap;
 }
 
+/**
+ * Live read of an account's Mezo Stability Pool position, straight from the StabilityPool contract.
+ * MUSD deposited there is not spent: it absorbs liquidations and earns the BTC collateral of liquidated Troves.
+ * The deposit leaves the wallet balance, so a statement shows it as MUSD out to the pool; this reading says what it is worth now.
+ * Current values only, NOT part of the hashed statement. Returns null when the network has no pool configured or the account has neither a deposit nor a pending gain.
+ *   getCompoundedMUSDDeposit(address) = 0x8c4726eb, getDepositorCollateralGain(address) = 0x307d3612, getTotalMUSDDeposits() = 0x309077b3
+ */
+export async function getStabilityPoolPosition(rpc, net, account) {
+  if (!net.stabilityPool || !isAddress(account)) return null;
+  const arg = account.toLowerCase().replace(/^0x/, '').padStart(64, '0');
+  const word = async (data) => BigInt(await rpc('eth_call', [{ to: net.stabilityPool, data }, 'latest']));
+  const [deposit, collateralGain, totalDeposits] = await Promise.all([word('0x8c4726eb' + arg), word('0x307d3612' + arg), word('0x309077b3')]);
+  if (deposit === 0n && collateralGain === 0n) return null;
+  // percentage of the whole pool, six decimals
+  const sharePct = totalDeposits > 0n ? Number((deposit * 10n ** 8n) / totalDeposits) / 1e6 : 0;
+  return { deposit, collateralGain, totalDeposits, sharePct };
+}
+
 /** Find the first block with timestamp >= ts (binary search). */
 export async function blockAtOrAfter(rpc, ts, latest) {
   let lo = 1, hi = latest;
@@ -395,7 +415,7 @@ export async function blockAtOrAfter(rpc, ts, latest) {
  * Markdown report for a lender or an accountant: statement summary, anchors, and (when the account has one) the Mezo Trove.
  * The Trove part is a live reading taken when the report is generated. It is not part of the hashed statement.
  */
-export function buildLenderReport({ net, summary: s, hash, anchors = [], trove = null, generatedAt = new Date(), reviewUrl = '' }) {
+export function buildLenderReport({ net, summary: s, hash, anchors = [], trove = null, pool = null, generatedAt = new Date(), reviewUrl = '' }) {
   const d = s.decimals, f = (v) => formatUnits(v, d), sym = s.symbol || 'token';
   const lines = [
     `# ${sym} lender report`,
@@ -439,7 +459,18 @@ export function buildLenderReport({ net, summary: s, hash, anchors = [], trove =
     }
     lines.push('', 'Read with the statement above: money minted to the account is a loan draw, money burned is a repayment.');
   }
+  lines.push('', '## Mezo Stability Pool (live reading at generation time)', '');
+  if (!pool) {
+    lines.push('No Stability Pool deposit or pending gain found for this account on this network.');
+  } else {
+    lines.push(
+      `- Deposit (after liquidation losses): ${formatUnits(pool.deposit, 18)} MUSD, ${pool.sharePct.toFixed(4)}% of the ${formatUnits(pool.totalDeposits, 18).replace(/(\.\d{2})\d+$/, '$1')} MUSD in the pool`,
+      `- Pending BTC gain from liquidated Troves: ${formatUnits(pool.collateralGain, 18)} BTC`,
+      '',
+      'MUSD placed in the pool is not spent: it left the wallet balance above (shown as MUSD out to the pool) and is still owned by the account.',
+    );
+  }
   lines.push('', '## How to check this report', '', '- Statement: the hash above identifies a deterministic CSV that anyone can rebuild from public Mezo chain data.',
-    '- Trove: read it yourself from TroveManager and the price feed; it changes every block and with every BTC price move.', '');
+    '- Trove and Stability Pool: read them yourself from TroveManager, the price feed and StabilityPool; they change with every block, liquidation and BTC price move.', '');
   return lines.join('\n');
 }
