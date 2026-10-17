@@ -122,6 +122,34 @@ async function resolveRange() {
 }
 
 let current = null;
+let expectedHash = null; // set when the page is opened from a "share for review" link
+
+const HASH_RE = /^0x[0-9a-fA-F]{64}$/;
+
+// The sender's link carries the statement hash. The reviewer's browser re-derives the statement
+// from chain data on its own and compares: a match means both sides hold the same books.
+function renderReview(st) {
+  const box = $('reviewBanner');
+  if (expectedHash) {
+    box.innerHTML = expectedHash.toLowerCase() === st.hash.toLowerCase()
+      ? notice('ok', '✔ Independent check passed: this statement, re-derived from chain data in your browser, has exactly the hash the sender shared. You can co-attest it below.')
+      : notice('bad', `✘ Hash mismatch. The sender shared <span class="mono">${esc(expectedHash)}</span> but the chain data for this range gives <span class="mono">${esc(st.hash)}</span>. Do not co-attest; ask the sender which range and token they used.`);
+    $('anchorBtn').textContent = 'Co-attest this statement';
+    $('label').placeholder = 'e.g. Reviewed by Kantor Akuntan Maju';
+  } else {
+    box.innerHTML = '';
+    $('anchorBtn').textContent = 'Anchor statement';
+  }
+  const s = st.summary;
+  const q = new URLSearchParams({ account: s.account, from: s.fromBlock, to: s.toBlock, net: s.chainId === MEZO_MAINNET.id ? 'mainnet' : 'testnet', expect: st.hash });
+  if ($('tokenSel').value === 'custom') q.set('token', s.token);
+  const url = `${location.origin}${location.pathname}?${q.toString()}`;
+  $('shareReview').innerHTML = `<h3 style="margin:14px 0 4px">Share for independent review</h3>
+    <p class="muted">Send this link to your accountant or lender. Their browser re-derives the statement from chain data and checks it against your hash. If it matches, they can co-attest in one click.</p>
+    <p class="mono"><a href="${esc(url)}">${esc(url)}</a></p>
+    <div class="actions"><button class="btn secondary" id="copyReview">Copy review link</button></div>`;
+  $('copyReview').onclick = () => navigator.clipboard.writeText(url);
+}
 
 async function generate() {
   const acct = $('acct').value.trim();
@@ -142,9 +170,11 @@ async function generate() {
     st.hash = keccak256(toBytes(st.csv));
     current = st;
     renderStatement(st);
+    renderReview(st);
     $('genStatus').textContent = `Done in ${((performance.now() - t0) / 1000).toFixed(1)} s.`;
     const q = new URLSearchParams({ account: acct, from, to, net: net.id === MEZO_MAINNET.id ? 'mainnet' : 'testnet' });
     if ($('tokenSel').value === 'custom') q.set('token', token);
+    if (expectedHash) q.set('expect', expectedHash);
     history.replaceState(null, '', '?' + q.toString());
   } catch (e) {
     $('genStatus').textContent = 'Error: ' + (e.shortMessage || e.message);
@@ -153,7 +183,8 @@ async function generate() {
     $('genProgress').classList.add('hidden');
   }
 }
-$('genBtn').addEventListener('click', generate);
+// A person pressing the button starts a new statement, so an old "expect" hash no longer applies.
+$('genBtn').addEventListener('click', (e) => { if (e.isTrusted) expectedHash = null; generate(); });
 
 function renderStatement(st) {
   const s = st.summary;
@@ -431,6 +462,7 @@ refreshDemoLinks();
   if (isAddress(a || '')) {
     $('acct').value = a;
     if (isAddress(tk || '')) { $('tokenSel').value = 'custom'; $('tokenRow').classList.remove('hidden'); $('tokenAddr').value = tk; }
+    if (HASH_RE.test(params.get('expect') || '')) expectedHash = params.get('expect');
     if (f && t) {
       $('preset').value = 'blocks';
       $('blocksRow').classList.remove('hidden');
