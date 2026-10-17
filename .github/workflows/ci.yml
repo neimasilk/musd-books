@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  contracts:
+    name: Foundry tests (unit, fuzz, invariant)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - name: forge test
+        run: forge test -vv
+        working-directory: contracts
+
+  engine:
+    name: Engine and report tests (offline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Stability Pool reading and report
+        run: node test/pool.test.mjs
+      - name: Lender report
+        run: node test/report.test.mjs
