@@ -397,10 +397,10 @@ function renderEmbedKit(container, { to, amount, ref, netName, url }) {
     <p class="muted">Paste one of these into your page. Customers pay in one transaction and the reference lands in your statement.</p>
     <div class="muted" style="margin:8px 0 4px">Preview</div><div id="embedPreview"></div>
     <div class="muted" style="margin:12px 0 4px">Option 1: plain HTML link (no script)</div>
-    <textarea id="embedLink" class="mono" rows="3" readonly spellcheck="false"></textarea>
+    <textarea id="embedLink" class="mono" rows="4" readonly spellcheck="false" style="width:100%;box-sizing:border-box;font-size:13px;padding:8px"></textarea>
     <div class="actions"><button class="btn secondary" id="copyEmbedLink">Copy HTML</button></div>
     <div class="muted" style="margin:12px 0 4px">Option 2: script (renders the button for you)</div>
-    <textarea id="embedScript" class="mono" rows="3" readonly spellcheck="false"></textarea>
+    <textarea id="embedScript" class="mono" rows="4" readonly spellcheck="false" style="width:100%;box-sizing:border-box;font-size:13px;padding:8px"></textarea>
     <div class="actions"><button class="btn secondary" id="copyEmbedScript">Copy HTML</button></div>`;
   container.appendChild(box);
   $('embedPreview').innerHTML = linkSnippet;
