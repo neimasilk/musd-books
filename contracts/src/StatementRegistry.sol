@@ -109,8 +109,9 @@ contract StatementRegistry {
         bytes32[] storage all = _statementsByAccount[account];
         total = all.length;
         if (offset >= total) return (new bytes32[](0), total);
-        uint256 end = offset + limit;
-        if (end > total) end = total;
+        // v2: compare against what is left instead of computing offset + limit, which overflowed
+        // for a huge limit (finding L-1 in SECURITY.md).
+        uint256 end = limit > total - offset ? total : offset + limit;
         page = new bytes32[](end - offset);
         for (uint256 i = offset; i < end; ++i) {
             page[i - offset] = all[i];

@@ -14,6 +14,19 @@ MUSD Books turns any Mezo address into a bookkeeping-grade statement for MUSD (o
 
 > It extends the author's earlier project [ArcBooks](https://github.com/neimasilk/arcbooks) (the same idea on Arc). The statement engine was rewritten for Mezo during Wave 1 of the Mezo Buildathon: ERC-20 logs instead of a native-token emitter, `balanceOf` instead of native balances, a new payment-reference contract, Mezo labels, and a token field in the registry.
 
+## New in Wave 2
+
+- **Act on Mezo from inside MUSD Books.** Next to a statement, the Trove owner can repay MUSD or add BTC collateral
+  (Mezo `BorrowerOperations`, with position hints from `HintHelpers` and `SortedTroves`), and deposit or withdraw MUSD in
+  the Stability Pool. A preview shows the new debt, collateral ratio and liquidation price, and refuses amounts the
+  protocol would reject. The lender report links straight to these actions.
+- **Trove panel fixed.** `getEntireDebtAndColl` already includes pending redistribution rewards; Wave 1 added them a
+  second time. The panel now shows the right numbers, names the redistributed part, shows the liquidation price, and
+  states the system mode: in MUSD, Recovery Mode (TCR below 150%) does not move the 110% liquidation line, it blocks
+  collateral withdrawals and limits new borrowing. Offline tests pin both (`node test/trove.test.mjs`).
+- **Contracts verified** on the Mezo Testnet explorer, and **version 2** of both contracts (reentrancy lock on
+  payments, overflow-free pagination) ready for mainnet. See [SECURITY.md](SECURITY.md).
+
 ## Why
 
 Mezo lets people borrow MUSD against Bitcoin instead of selling it. A borrower, a small business paid in MUSD and their accountant all need a clean, checkable record of what came in, what went out, what was borrowed and what was repaid. A block explorer shows raw logs; a spreadsheet export from one party proves nothing to another. MUSD Books produces a statement a third party can verify.
@@ -49,7 +62,7 @@ The same `(chain, account, token, from_block, to_block, pay_contract)` always yi
 - **Lender report and merchant kit** (`python test/features_test.py`, `node test/report.test.mjs`): the statement page downloads a Markdown report for a lender (statement summary, reconciliation, anchors, a live Trove section with collateral ratio and how far BTC must fall before liquidation, and an independent-check link). The Request tab produces a "Pay with MUSD" button for a merchant's website, either as a plain HTML link or with `pay-button.js`; the test checks that both render, that the link opens the pay page with the right payee, amount and reference, and that invalid settings give a disabled button.
 - **Mezo Trove panel** (`node test/trove.live.test.mjs`): reads the account's Trove (collateral, debt, interest, collateral ratio) live from `TroveManager` and the price feed, checked against a real testnet Trove and a mainnet one (`ICR = collateral value / debt`). It is shown next to the statement and is not part of the hashed CSV, so existing anchors stay valid.
 - **Mezo Stability Pool panel** (`node test/pool.test.mjs`, `node test/pool.live.test.mjs`, `python test/features_test.py`): reads the account's Stability Pool position (deposit after liquidation losses, share of the pool, pending BTC gain from liquidated Troves) live from the `StabilityPool` contract. A deposit leaves the wallet balance, so a statement shows it as MUSD out to the pool; this panel says what it is worth now. Validated with a real 100 MUSD deposit on Mezo Testnet (`node scripts/pool_demo.mjs`, which found that the pool pulls MUSD with `transferFrom` and needs an approval first) and a read of the mainnet pool. The lender report gets a matching section. Like the Trove panel, it is not part of the hashed CSV.
-- **Foundry tests, 27 in total:** 13 unit tests for `MusdPay` (log order, permit, already-used permit, tokens that return nothing, bad inputs) and `StatementRegistry`, 11 property tests (log order and balances for any amount, an attacker cannot spend a victim's approval, garbage permits create no allowance, exact pagination and anchor round trips), 2 invariant suites (128,000 random calls each: the contract never holds tokens and supply is conserved; per-hash anchor counts always match), and a hook-token test that pins a documented edge case. Slither reports 3 informational results and nothing high or medium. They run on every push in GitHub Actions (`.github/workflows/ci.yml`: Foundry tests, plus the offline engine tests). See [SECURITY.md](SECURITY.md) for the findings and the limits of this self-review.
+- **Foundry tests, 28 in total:** 14 unit tests for `MusdPay` (log order, permit, already-used permit, tokens that return nothing, bad inputs) and `StatementRegistry`, 11 property tests (log order and balances for any amount, an attacker cannot spend a victim's approval, garbage permits create no allowance, exact pagination and anchor round trips), 2 invariant suites (128,000 random calls each: the contract never holds tokens and supply is conserved; per-hash anchor counts always match), and two hook-token tests (version 2 refuses a nested payment; a plain payment keeps its log order). Slither reports 3 informational results and nothing high or medium. They run on every push in GitHub Actions (`.github/workflows/ci.yml`: Foundry tests, plus the offline engine tests). See [SECURITY.md](SECURITY.md) for the findings and the limits of this self-review.
 
 ## Run locally
 
@@ -64,8 +77,9 @@ node test/statement.live.test.mjs mainnet 5000
 cd contracts && forge test
 
 # engine and report tests
-node test/pool.test.mjs && node test/report.test.mjs
+node test/pool.test.mjs && node test/report.test.mjs && node test/trove.test.mjs
 python test/features_test.py && python test/review_flow_test.py && python test/wallet_flow_test.py
+python test/trove_actions_test.py   # repay, add collateral, Stability Pool deposit and withdrawal on Mezo Testnet
 ```
 
 ## Deployments

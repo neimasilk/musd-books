@@ -170,13 +170,38 @@
         <div class="card hidden" id="troveBox">
           <h2>Mezo Trove <span class="muted" style="font-weight:400">(live, from TroveManager and the price feed; not part of the hashed statement)</span></h2>
           <div class="stats" id="troveStats"></div>
+          <div id="troveSystem"></div>
           <p class="muted">A Trove is the Bitcoin-backed MUSD loan. Read next to the statement, it shows what is still owed against the BTC locked behind it: the mint rows above are loan draws, the burn rows are repayments.</p>
+          <div id="troveActions" class="hidden">
+            <h3 style="margin:14px 0 4px">Act on this Trove</h3>
+            <p class="muted">For the Trove owner: connect the wallet that owns it. The transaction goes straight to Mezo's <code>BorrowerOperations</code>; MUSD Books never holds funds. A repayment shows up as a burn row in the next statement.</p>
+            <div class="row">
+              <div><label for="repayAmt">Repay MUSD</label><input id="repayAmt" inputmode="decimal" placeholder="e.g. 50" /></div>
+              <div><label for="collAmt">Add BTC collateral</label><input id="collAmt" inputmode="decimal" placeholder="e.g. 0.001" /></div>
+            </div>
+            <div id="trovePreview" class="muted" style="margin:6px 0"></div>
+            <div class="actions">
+              <button id="repayBtn" class="btn">Repay MUSD</button>
+              <button id="addCollBtn" class="btn secondary">Add collateral</button>
+            </div>
+            <div id="troveActStatus"></div>
+          </div>
         </div>
 
         <div class="card hidden" id="poolBox">
           <h2>Mezo Stability Pool <span class="muted" style="font-weight:400">(live, from the StabilityPool contract; not part of the hashed statement)</span></h2>
           <div class="stats" id="poolStats"></div>
           <p class="muted">MUSD placed in the Stability Pool is not spent: it absorbs liquidations and earns the BTC collateral of liquidated Troves. It leaves the wallet balance, so the statement shows it as MUSD out to the pool; this card says what that deposit is worth now.</p>
+          <div id="poolActions">
+            <h3 style="margin:14px 0 4px">Put idle MUSD to work</h3>
+            <p class="muted">For the account owner: deposit MUSD into Mezo's <code>StabilityPool</code> or take it back. Either call also pays out any pending BTC gain.</p>
+            <div class="row"><div><label for="spAmt">MUSD amount</label><input id="spAmt" inputmode="decimal" placeholder="e.g. 100" /></div></div>
+            <div class="actions">
+              <button id="spDepositBtn" class="btn">Deposit to Stability Pool</button>
+              <button id="spWithdrawBtn" class="btn secondary">Withdraw from Stability Pool</button>
+            </div>
+            <div id="poolActStatus"></div>
+          </div>
         </div>
 
         <div class="card">

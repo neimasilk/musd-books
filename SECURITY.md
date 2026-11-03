@@ -4,8 +4,9 @@ MUSD Books has two small contracts and a browser-only app. This file says what t
 checked, what was found, and what is not covered.
 
 **This is a self-review by the author (an AI model working for an individual developer). It is not a
-professional audit.** Both contracts are deployed on Mezo Testnet only. A mainnet deployment is planned
-after an independent review.
+professional audit.** Both contracts are deployed on Mezo Testnet only, as version 1 (source at commit
+`1b9fb0b`, verified on the Mezo Testnet explorer). The source in this repository is version 2, which fixes
+I-1 and L-1 below and is the version meant for mainnet.
 
 ## What the contracts do and do not do
 
@@ -25,11 +26,11 @@ after an independent review.
 
 | Check | Result |
 |---|---|
-| Unit tests (Foundry), 13 tests | pass |
+| Unit tests (Foundry), 14 tests | pass |
 | Property tests (fuzz, 1,000 runs each in CI, 2,000 for the release check) | pass |
 | Invariant tests, 128,000 random calls per suite for the release check (256 runs x 500 calls) | pass |
-| Hook-token test showing log order under reentrancy | pass (documents finding I-1) |
-| `forge lint` | 1 note, same as I-1 |
+| Hook-token tests: a nested payment is refused (v2), a plain payment keeps `Transfer` then `PaymentReference` | pass |
+| `forge lint` | 1 note, same as I-1 (the event still follows the token call; the lock makes the order fixed) |
 | Slither 0.11.5 (101 detectors) | 3 results, all informational, none high or medium |
 
 Properties covered by the tests:
@@ -47,18 +48,33 @@ Run them yourself:
 cd contracts
 forge test                 # CI settings: 1,000 fuzz runs, 64 x 200 invariant calls
 FOUNDRY_INVARIANT_RUNS=256 FOUNDRY_INVARIANT_DEPTH=500 forge test --fuzz-runs 2000   # the heavier release check
-node ../test/pool.test.mjs && node ../test/report.test.mjs                # offline engine tests
+node ../test/pool.test.mjs && node ../test/report.test.mjs && node ../test/trove.test.mjs   # offline engine tests
 ```
 
 ## Findings
 
 | ID | Severity | Finding | Status |
 |---|---|---|---|
-| I-1 | Informational | `PaymentReference` is emitted after the external token call (Slither `reentrancy-events`, `forge lint`). With a plain ERC-20 such as MUSD or MEZO the order cannot be changed. With a token that calls a hook on the receiver (ERC-777 style), a nested payment can sit between a payment's `Transfer` and its `PaymentReference` (`test/MusdPay.hooks.t.sol`). The statement engine joins the two by log position and requires payer, merchant and amount to match, so the affected payment shows as a plain transfer instead of a referenced one. Funds are never at risk. | By design; a reentrancy lock is planned for the mainnet version. |
+| I-1 | Informational | `PaymentReference` is emitted after the external token call (Slither `reentrancy-events`, `forge lint`). With a plain ERC-20 such as MUSD or MEZO the order cannot be changed. With a token that calls a hook on the receiver (ERC-777 style), a nested payment can sit between a payment's `Transfer` and its `PaymentReference` (`test/MusdPay.hooks.t.sol`). The statement engine joins the two by log position and requires payer, merchant and amount to match, so the affected payment shows as a plain transfer instead of a referenced one. Funds are never at risk. | **Fixed in v2**: `pay` and `payWithPermit` are `nonReentrant`, so a nested payment reverts (`test_hookToken_reentrantPaymentIsRefused`). The testnet v1 deployment keeps the old behaviour. |
 | I-2 | Informational | `_safeTransferFrom` uses a low-level call (Slither `low-level-calls`). This is deliberate: it supports tokens whose `transferFrom` returns nothing, checks that the token has code, and rejects a `false` return. Tested with a no-return token. | Accepted. |
-| L-1 | Low | `StatementRegistry.statementsOf(account, offset, limit)` computes `offset + limit`, which overflows for a huge `limit` and makes this view call revert instead of returning the tail. No state or funds involved; the app always passes a small limit. Pinned by `test_knownIssue_statementsOf_hugeLimitRevertsOnOverflow`. | Fix planned for the mainnet version (the deployed testnet contract is left unchanged so the demo anchors stay valid). |
+| L-1 | Low | `StatementRegistry.statementsOf(account, offset, limit)` computes `offset + limit`, which overflows for a huge `limit` and makes this view call revert instead of returning the tail. No state or funds involved; the app always passes a small limit. | **Fixed in v2**: the end index is computed without `offset + limit` (`test_statementsOf_hugeLimitReturnsTail`). The testnet v1 deployment is left unchanged so the demo anchors stay valid. |
 | L-2 | Low | Anchoring is permissionless, so anyone can add hashes to any account's list (noise or spam; the cost is gas). It cannot change or remove existing anchors. The app shows the attester of every anchor and verification never trusts an anchor without re-deriving the statement. | By design. |
 | L-3 | Low | `PaymentReference` logs the requested amount. For a fee-on-transfer or rebasing token the received amount can differ. MUSD and MEZO are plain ERC-20s. The statement engine reconciles against the token's own `Transfer` logs and balances, so a mismatch shows up as an unexplained difference instead of being hidden. | Documented. |
+
+## Actions on Mezo from the app (Wave 2)
+
+The app can now send transactions to Mezo's own contracts: `BorrowerOperations.repayMUSD` and `addColl` for the
+statement account's Trove, and `StabilityPool.provideToSP` / `withdrawFromSP` (with an `approve` first when needed).
+MUSD Books adds no contract in between and never holds funds.
+
+- Each action requires the connected wallet to be the statement account; otherwise it stops before the wallet is asked.
+- Amounts are checked against the same rules the protocol enforces (net debt stays at or above `minNetDebt`, a
+  repayment never exceeds debt minus the 200 MUSD gas compensation, wallet balances, deposit size), so the user sees
+  the reason instead of a reverted transaction. The protocol still enforces them.
+- The sorted-list hints come from Mezo's `HintHelpers` and `SortedTroves`; if that lookup fails the app sends zero hints,
+  which are valid and only cost more gas.
+- Tested end to end on Mezo Testnet with a scripted wallet and checked onchain after each call
+  (`python test/trove_actions_test.py`).
 
 ## Trust assumptions and limits
 

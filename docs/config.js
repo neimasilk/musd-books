@@ -74,3 +74,25 @@ export const PERMIT_ABI = [
   },
   { type: 'function', name: 'nonces', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ type: 'uint256' }] },
 ];
+
+// Mezo MUSD core contracts used for actions taken from inside MUSD Books (addresses live in engine.js NETWORKS).
+// BorrowerOperations: repay MUSD and add BTC collateral to the caller's own Trove. The hints are positions in the
+// sorted Trove list; HintHelpers.getApproxHint + SortedTroves.findInsertPosition compute them (zero hints also work, at more gas).
+export const BORROWER_OPS_ABI = [
+  { type: 'function', name: 'repayMUSD', stateMutability: 'nonpayable', inputs: [{ name: '_amount', type: 'uint256' }, { name: '_upperHint', type: 'address' }, { name: '_lowerHint', type: 'address' }], outputs: [] },
+  { type: 'function', name: 'addColl', stateMutability: 'payable', inputs: [{ name: '_upperHint', type: 'address' }, { name: '_lowerHint', type: 'address' }], outputs: [] },
+  { type: 'function', name: 'minNetDebt', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+];
+export const HINT_HELPERS_ABI = [
+  { type: 'function', name: 'getApproxHint', stateMutability: 'view', inputs: [{ name: '_CR', type: 'uint256' }, { name: '_numTrials', type: 'uint256' }, { name: '_inputRandomSeed', type: 'uint256' }], outputs: [{ name: 'hintAddress', type: 'address' }, { name: 'diff', type: 'uint256' }, { name: 'latestRandomSeed', type: 'uint256' }] },
+];
+export const SORTED_TROVES_ABI = [
+  { type: 'function', name: 'findInsertPosition', stateMutability: 'view', inputs: [{ name: '_NICR', type: 'uint256' }, { name: '_prevId', type: 'address' }, { name: '_nextId', type: 'address' }], outputs: [{ type: 'address' }, { type: 'address' }] },
+  { type: 'function', name: 'getSize', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+];
+// StabilityPool: deposit MUSD (the pool pulls it with transferFrom, so the depositor approves first) and withdraw it.
+// Both calls also pay out any pending BTC gain from liquidations to the depositor.
+export const STABILITY_POOL_ABI = [
+  { type: 'function', name: 'provideToSP', stateMutability: 'nonpayable', inputs: [{ name: '_amount', type: 'uint256' }], outputs: [] },
+  { type: 'function', name: 'withdrawFromSP', stateMutability: 'nonpayable', inputs: [{ name: '_amount', type: 'uint256' }], outputs: [] },
+];

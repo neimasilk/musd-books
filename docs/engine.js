@@ -44,6 +44,9 @@ export const MEZO_TESTNET = {
   troveManager: '0xE47c80e8c23f6B4A1aE41c34837a0599D5D16bb0',
   priceFeed: '0x86bCF0841622a5dAC14A313a15f96A95421b9366',
   stabilityPool: '0x1CCA7E410eE41739792eA0A24e00349Dd247680e',
+  borrowerOperations: '0xCdF7028ceAB81fA0C6971208e83fa7872994beE5',
+  hintHelpers: '0x4e4cBA3779d56386ED43631b4dCD6d8EacEcBCF6',
+  sortedTroves: '0x722E4D24FD6Ff8b0AC679450F3D91294607268fA',
   // Filled in by the app config after deployment.
   payAddress: null,
 };
@@ -61,6 +64,9 @@ export const MEZO_MAINNET = {
   troveManager: '0x94AfB503dBca74aC3E4929BACEeDfCe19B93c193',
   priceFeed: '0xc5aC5A8892230E0A3e1c473881A2de7353fFcA88',
   stabilityPool: '0x73245Eff485aB3AAc1158B3c4d8f4b23797B0e32',
+  borrowerOperations: '0x44b1bac67dDA612a41a58AAf779143B181dEe031',
+  hintHelpers: '0xD267b3bE2514375A075fd03C3D9CBa6b95317DC3',
+  sortedTroves: '0x8C5DB4C62BF29c1C4564390d10c20a47E0b2749f',
   payAddress: null,
 };
 
@@ -364,20 +370,84 @@ export async function getTroveSnapshot(rpc, net, account) {
   const words = (hexStr) => { const h = hexStr.replace(/^0x/, ''); return Array.from({ length: h.length / 64 }, (_, i) => BigInt('0x' + h.slice(i * 64, i * 64 + 64))); };
   const statusCode = Number(words(await call(net.troveManager, '0x21e37801' + arg))[0]);
   if (statusCode === 0) return null;
-  const [coll, principal, interest, pCollateral, pPrincipal, pInterest] = words(await call(net.troveManager, '0xb91af97c' + arg));
+  // getEntireDebtAndColl already folds the pending redistribution rewards into coll, principal and interest
+  // (TroveManager adds them before returning). The pending parts come back separately for information only:
+  // adding them again would count them twice.
+  const [coll, principal, interest, pendingColl, pendingPrincipal, pendingInterest] = words(await call(net.troveManager, '0xb91af97c' + arg));
   const rateBp = Number(words(await call(net.troveManager, '0x92b7659b' + arg))[0]);
-  const snap = { status: TROVE_STATUS[statusCode] || String(statusCode), active: statusCode === 1, coll: coll + pCollateral, principal: principal + pPrincipal, interest: interest + pInterest, rateBp };
-  snap.debt = snap.principal + snap.interest;
+  const snap = { status: TROVE_STATUS[statusCode] || String(statusCode), active: statusCode === 1, coll, principal, interest, pendingColl, pendingDebt: pendingPrincipal + pendingInterest, rateBp };
+  snap.debt = principal + interest;
   if (snap.active) {
     try {
       const price = words(await call(net.priceFeed, '0x0fdb11cf'))[0];
-      const icr = words(await call(net.troveManager, '0xd293c710' + arg + price.toString(16).padStart(64, '0')))[0];
+      const p = price.toString(16).padStart(64, '0');
+      const icr = words(await call(net.troveManager, '0xd293c710' + arg + p))[0];
       snap.price = price;      // USD per BTC, 18 decimals
       snap.icr = icr;          // collateral ratio, 1e18 = 100%
-      snap.collUsd = (snap.coll * price) / 10n ** 18n;
+      snap.collUsd = (coll * price) / E18;
+      // Liquidation needs ICR < 110% in both modes (TroveManager only liquidates below MCR), so the price at which
+      // this Trove becomes liquidatable is debt * 110% / collateral.
+      if (coll > 0n) snap.liquidationPrice = (snap.debt * MCR) / coll;
+      // System state. Recovery Mode (TCR < 150%) does not lower the liquidation line in MUSD; it restricts what a
+      // borrower may do: no collateral withdrawal, and new debt only if the Trove ends at or above 150%.
+      snap.tcr = words(await call(net.troveManager, '0xb82f263d' + p))[0];            // getTCR(price)
+      snap.recoveryMode = words(await call(net.troveManager, '0x4e443d9e' + p))[0] === 1n; // checkRecoveryMode(price)
     } catch (_) { /* oracle unavailable: leave price fields out */ }
   }
   return snap;
+}
+
+const E18 = 10n ** 18n;
+
+/** Display numbers for a Trove snapshot: ratios in percent, liquidation price, and how far BTC would have to fall. */
+export function troveRisk(t) {
+  const usd = (v) => formatUnits(v, 18).replace(/(\.\d{2})\d+$/, '$1');
+  const out = { icrPct: t.icr ? Number(t.icr) / 1e16 : null, tcrPct: t.tcr ? Number(t.tcr) / 1e16 : null, price: t.price ? usd(t.price) : null };
+  if (t.liquidationPrice && t.price) {
+    out.liqPrice = usd(t.liquidationPrice);
+    out.fallPct = (1 - Number(t.liquidationPrice) / Number(t.price)) * 100;
+  } else if (t.icr) {
+    out.fallPct = (1 - 1.1 / (Number(t.icr) / 1e18)) * 100; // same thing from the ratio alone
+  }
+  if (t.tcr) out.recoveryFallPct = Math.max(0, (1 - 1.5 / (Number(t.tcr) / 1e18)) * 100);
+  return out;
+}
+
+/** MUSD protocol constants (LiquityBase): minimum collateral ratio, critical system ratio, gas compensation. */
+export const MCR = 11n * 10n ** 17n;           // 110%
+export const CCR = 15n * 10n ** 17n;           // 150%
+export const GAS_COMPENSATION = 200n * E18;   // 200 MUSD reserved at opening, returned on close
+export const MIN_NET_DEBT = 1800n * E18;      // BorrowerOperations.minNetDebt at deployment
+
+/**
+ * Preview of a Trove change made from inside MUSD Books (repay MUSD and/or add BTC collateral), using the same rules
+ * BorrowerOperations enforces. Returns the new amounts, the new collateral ratio, the nominal ratio used for the
+ * sorted-list hint, and a list of reasons the transaction would revert (empty when it should go through).
+ *   repay: MUSD amount (18 decimals), applied to interest first, then principal (InterestRateManager.updateTroveDebt).
+ *   addColl: BTC amount (18 decimals).
+ *   musdBalance: the caller's MUSD balance, when known.
+ */
+export function planTroveChange(snap, { repay = 0n, addColl = 0n, musdBalance = null, minNetDebt = MIN_NET_DEBT } = {}) {
+  const errors = [];
+  if (!snap || !snap.active) errors.push('This account has no active Trove.');
+  if (repay < 0n || addColl < 0n) errors.push('Amounts must be positive.');
+  if (repay === 0n && addColl === 0n) errors.push('Enter an amount.');
+  const debt = snap ? snap.debt : 0n;
+  // Repayment limits: net debt (debt minus the 200 MUSD gas compensation) must stay at or above minNetDebt,
+  // and the repayment can never exceed debt minus the gas compensation. Closing the Trove is a separate action.
+  const maxRepay = debt > GAS_COMPENSATION + minNetDebt ? debt - GAS_COMPENSATION - minNetDebt : 0n;
+  if (repay > maxRepay) errors.push(`At most ${formatUnits(maxRepay, 18)} MUSD can be repaid while the Trove stays open (its net debt must stay at or above ${formatUnits(minNetDebt, 18)} MUSD).`);
+  if (musdBalance !== null && repay > musdBalance) errors.push(`The wallet holds ${formatUnits(musdBalance, 18)} MUSD, less than the repayment.`);
+  const interestPaid = snap ? (repay < snap.interest ? repay : snap.interest) : 0n;
+  const newInterest = snap ? snap.interest - interestPaid : 0n;
+  const newPrincipal = snap ? snap.principal - (repay - interestPaid) : 0n;
+  const newColl = snap ? snap.coll + addColl : 0n;
+  const newDebt = newPrincipal + newInterest;
+  const newIcr = snap && snap.price && newDebt > 0n ? (newColl * snap.price) / newDebt : null;
+  // TroveManager orders Troves by nominal ratio, collateral * 1e20 / principal (getNominalICR).
+  const nicr = newPrincipal > 0n ? (newColl * 10n ** 20n) / newPrincipal : 2n ** 256n - 1n;
+  const newLiquidationPrice = newColl > 0n ? (newDebt * MCR) / newColl : null;
+  return { errors, maxRepay, newColl, newPrincipal, newInterest, newDebt, newIcr, nicr, newLiquidationPrice };
 }
 
 /**
@@ -415,7 +485,7 @@ export async function blockAtOrAfter(rpc, ts, latest) {
  * Markdown report for a lender or an accountant: statement summary, anchors, and (when the account has one) the Mezo Trove.
  * The Trove part is a live reading taken when the report is generated. It is not part of the hashed statement.
  */
-export function buildLenderReport({ net, summary: s, hash, anchors = [], trove = null, pool = null, generatedAt = new Date(), reviewUrl = '' }) {
+export function buildLenderReport({ net, summary: s, hash, anchors = [], trove = null, pool = null, generatedAt = new Date(), reviewUrl = '', actionUrl = '' }) {
   const d = s.decimals, f = (v) => formatUnits(v, d), sym = s.symbol || 'token';
   const lines = [
     `# ${sym} lender report`,
@@ -452,11 +522,20 @@ export function buildLenderReport({ net, summary: s, hash, anchors = [], trove =
       `- Collateral: ${btc} BTC${trove.collUsd ? ` (about $${formatUnits(trove.collUsd, 18).replace(/(\.\d{2})\d+$/, '$1')} at the oracle price)` : ''}`,
       `- Debt: ${formatUnits(trove.debt, 18)} MUSD (principal ${formatUnits(trove.principal, 18)} + interest ${formatUnits(trove.interest, 18)}), annual interest rate ${(trove.rateBp / 100).toFixed(2)}%`,
     );
-    if (trove.icr) {
-      const icrPct = Number(trove.icr) / 1e16;
-      const fall = (1 - 1.1 / (Number(trove.icr) / 1e18)) * 100;
-      lines.push(`- Collateral ratio: ${icrPct.toFixed(2)}%. Liquidation applies below 110%, so BTC would have to fall about ${fall.toFixed(1)}% from the oracle price.`);
+    if (trove.pendingDebt || trove.pendingColl) {
+      lines.push(`- Included above: ${formatUnits(trove.pendingDebt || 0n, 18)} MUSD of debt and ${formatUnits(trove.pendingColl || 0n, 18)} BTC of collateral redistributed from liquidated Troves and not yet written to this Trove.`);
     }
+    if (trove.icr) {
+      const r = troveRisk(trove);
+      lines.push(`- Collateral ratio: ${r.icrPct.toFixed(2)}%. Liquidation applies below 110% (in Normal and Recovery Mode alike)${r.liqPrice ? `, at a BTC price of about $${r.liqPrice}, ${r.fallPct.toFixed(1)}% below the oracle price of $${r.price}` : `, so BTC would have to fall about ${r.fallPct.toFixed(1)}% from the oracle price`}.`);
+    }
+    if (trove.tcr) {
+      const r = troveRisk(trove);
+      lines.push(trove.recoveryMode
+        ? `- System: RECOVERY MODE (total collateral ratio ${r.tcrPct.toFixed(2)}%, below 150%). The owner cannot withdraw collateral, and new borrowing must leave the Trove at or above 150%. Repaying and adding collateral are always allowed.`
+        : `- System: Normal Mode (total collateral ratio ${r.tcrPct.toFixed(2)}%; Recovery Mode starts below 150%, about ${r.recoveryFallPct.toFixed(1)}% lower BTC price).`);
+    }
+    if (actionUrl) lines.push(`- Owner actions: the Trove owner can repay MUSD or add BTC collateral from MUSD Books at ${actionUrl} (calls Mezo BorrowerOperations directly).`);
     lines.push('', 'Read with the statement above: money minted to the account is a loan draw, money burned is a repayment.');
   }
   lines.push('', '## Mezo Stability Pool (live reading at generation time)', '');

@@ -118,12 +118,15 @@ contract StatementRegistryFuzzTest is Test {
     ///      overflows for a huge `limit`, so the view call reverts instead of returning the tail.
     ///      No funds or state are involved and the app always passes a small limit. This test
     ///      pins the current behaviour so a future fix has to update it on purpose.
-    function test_knownIssue_statementsOf_hugeLimitRevertsOnOverflow() public {
+    /// L-1 fixed in v2: a huge limit returns the tail instead of overflowing.
+    function test_statementsOf_hugeLimitReturnsTail() public {
         address account = address(0xACC0);
         reg.anchor(bytes32(uint256(1)), account, address(0xB1), 0, 1, "");
         reg.anchor(bytes32(uint256(2)), account, address(0xB1), 0, 1, "");
-        vm.expectRevert(stdError.arithmeticError);
-        reg.statementsOf(account, 1, type(uint256).max);
+        (bytes32[] memory page, uint256 total) = reg.statementsOf(account, 1, type(uint256).max);
+        assertEq(total, 2);
+        assertEq(page.length, 1);
+        assertEq(page[0], bytes32(uint256(2)));
     }
 }
 

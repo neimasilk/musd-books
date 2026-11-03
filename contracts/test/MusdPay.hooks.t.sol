@@ -58,11 +58,11 @@ contract ReentrantMerchant is IReceiverHook {
     }
 }
 
-/// @dev Documents a property that holds for plain ERC-20s but not for hook tokens: with a hook,
-///      a reentrant payment can sit between a payment's Transfer log and its PaymentReference log.
-///      The statement engine joins the two by log position and requires payer, merchant and
-///      amount to match, so the outer payment then shows up as a plain transfer instead of a
-///      referenced payment. Funds are never at risk (see AUDIT-NOTES.md, finding I-1).
+/// @dev Finding I-1: with a hook token, a reentrant payment could sit between a payment's Transfer
+///      log and its PaymentReference log, so the statement engine (which joins the two by log
+///      position) would show the outer payment as a plain transfer. v2 adds a reentrancy lock:
+///      the nested payment now reverts, so a referenced payment is always Transfer + its own
+///      PaymentReference with nothing in between. Funds were never at risk.
 contract MusdPayHookTokenTest is Test {
     MusdPay pay;
     MockHookToken token;
@@ -75,7 +75,7 @@ contract MusdPayHookTokenTest is Test {
         token = new MockHookToken();
     }
 
-    function test_hookToken_reentrantPaymentSplitsTransferFromItsReference() public {
+    function test_hookToken_reentrantPaymentIsRefused() public {
         address payer = address(0xA11CE);
         address sink = address(0x51);
         ReentrantMerchant merchant = new ReentrantMerchant(pay, token, sink);
@@ -85,25 +85,33 @@ contract MusdPayHookTokenTest is Test {
         vm.prank(payer);
         token.approve(address(pay), 100);
 
+        // the inner pay() hits the lock, the hook reverts, so the token call fails as a whole
+        vm.prank(payer);
+        vm.expectRevert(MusdPay.TransferFailed.selector);
+        pay.pay(address(token), address(merchant), 10, "outer");
+
+        // nothing moved
+        assertEq(token.balanceOf(payer), 100);
+        assertEq(token.balanceOf(address(merchant)), 1);
+        assertEq(token.balanceOf(sink), 0);
+        assertEq(token.balanceOf(address(pay)), 0);
+    }
+
+    /// A hook token whose receiver does NOT pay again still works, and the log order is exact.
+    function test_hookToken_plainPaymentKeepsTransferThenReference() public {
+        address payer = address(0xA11CE);
+        address merchant = address(0xBEEF); // an EOA: no hook is called
+        token.mint(payer, 100);
+        vm.prank(payer);
+        token.approve(address(pay), 100);
+
         vm.recordLogs();
         vm.prank(payer);
-        pay.pay(address(token), address(merchant), 10, "outer");
+        pay.pay(address(token), merchant, 10, "only");
         Vm.Log[] memory logs = vm.getRecordedLogs();
-
-        // Transfer(outer), Transfer(inner), PaymentReference(inner), PaymentReference(outer)
-        assertEq(logs.length, 4);
+        assertEq(logs.length, 2);
         assertEq(logs[0].topics[0], TRANSFER_SIG);
-        assertEq(logs[1].topics[0], TRANSFER_SIG);
-        assertEq(logs[2].topics[0], REFERENCE_SIG);
-        assertEq(logs[3].topics[0], REFERENCE_SIG);
-        // the reference that follows the first Transfer is the inner one, not the outer payment's
-        assertEq(address(uint160(uint256(logs[2].topics[2]))), address(merchant)); // payer of the inner payment
-        assertEq(address(uint160(uint256(logs[3].topics[2]))), payer); // payer of the outer payment
-
-        // funds are exact either way
-        assertEq(token.balanceOf(payer), 90);
-        assertEq(token.balanceOf(address(merchant)), 10);
-        assertEq(token.balanceOf(sink), 1);
-        assertEq(token.balanceOf(address(pay)), 0);
+        assertEq(logs[1].topics[0], REFERENCE_SIG);
+        assertEq(token.balanceOf(merchant), 10);
     }
 }

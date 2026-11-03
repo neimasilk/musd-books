@@ -110,8 +110,11 @@ def main():
         # ---- C. Stability Pool
         pg2.wait_for_selector("#poolBox:not(.hidden)", timeout=60000)
         pool_txt = pg2.inner_text("#poolStats")
-        check("pool card shows the deposit, the share of the pool and the pending BTC gain", re.search(r"100(\.0+)? MUSD", pool_txt) and "Share of pool" in pool_txt and "Pending BTC gain" in pool_txt, pool_txt)
-        check("report has a Stability Pool section with the deposit", "## Mezo Stability Pool" in md and "Deposit (after liquidation losses): 100 MUSD" in md, md[md.find("## Mezo Stability Pool"):][:500])
+        dep = re.search(r"Deposit\s+([\d,]+(?:\.\d+)?)", pool_txt)
+        # the account made a real 100 MUSD deposit in Wave 1; test/trove_actions_test.py adds and withdraws on top of it
+        check("pool card shows the deposit, the share of the pool and the pending BTC gain", dep and float(dep.group(1).replace(",", "")) >= 100 and "Share of pool" in pool_txt and "Pending BTC gain" in pool_txt, pool_txt)
+        mdep = re.search(r"Deposit \(after liquidation losses\): ([\d.]+) MUSD", md)
+        check("report has a Stability Pool section with the deposit", "## Mezo Stability Pool" in md and mdep and float(mdep.group(1)) >= 100, md[md.find("## Mezo Stability Pool"):][:500])
         check("report explains that pooled MUSD is not spent", "is not spent" in md)
         pg3 = b.new_page()
         pg3.goto(BASE + f"index.html?account={STORE}&from=16192210&to=16192312&net=testnet")

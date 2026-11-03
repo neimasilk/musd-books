@@ -21,8 +21,14 @@ interface IERC20PermitMinimal {
 ///
 ///         The contract holds no funds, has no owner, no fee and no upgrade path: tokens go
 ///         straight from payer to merchant inside one call.
+///
+///         v2 (mainnet): payments are not reentrant. With a token that calls a hook on the
+///         receiver, a nested payment could otherwise sit between a payment's `Transfer` and
+///         its `PaymentReference` (finding I-1 in SECURITY.md); now such a nested payment reverts.
 contract MusdPay {
     uint256 public constant MAX_REF_BYTES = 96;
+
+    uint256 private _lock = 1;
 
     /// @notice Emitted directly after the token's `Transfer` log for the same payment.
     event PaymentReference(
@@ -39,16 +45,19 @@ contract MusdPay {
     error RefTooLong();
     error TransferFailed();
     error TokenNotContract();
+    error Reentrancy();
+
+    modifier nonReentrant() {
+        if (_lock != 1) revert Reentrancy();
+        _lock = 2;
+        _;
+        _lock = 1;
+    }
 
     /// @notice Pay `amount` of `token` to `merchant` with a reference. The payer must have
     ///         approved this contract for at least `amount` first.
-    function pay(address token, address merchant, uint256 amount, string calldata ref) public {
-        if (merchant == address(0)) revert ZeroMerchant();
-        if (amount == 0) revert ZeroAmount();
-        if (bytes(ref).length > MAX_REF_BYTES) revert RefTooLong();
-
-        _safeTransferFrom(token, msg.sender, merchant, amount);
-        emit PaymentReference(token, msg.sender, merchant, amount, keccak256(bytes(ref)), ref);
+    function pay(address token, address merchant, uint256 amount, string calldata ref) external nonReentrant {
+        _pay(token, merchant, amount, ref);
     }
 
     /// @notice Same as `pay`, but the approval is granted by an EIP-2612 permit signature, so
@@ -64,9 +73,18 @@ contract MusdPay {
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) external {
+    ) external nonReentrant {
         try IERC20PermitMinimal(token).permit(msg.sender, address(this), amount, deadline, v, r, s) {} catch {}
-        pay(token, merchant, amount, ref);
+        _pay(token, merchant, amount, ref);
+    }
+
+    function _pay(address token, address merchant, uint256 amount, string calldata ref) private {
+        if (merchant == address(0)) revert ZeroMerchant();
+        if (amount == 0) revert ZeroAmount();
+        if (bytes(ref).length > MAX_REF_BYTES) revert RefTooLong();
+
+        _safeTransferFrom(token, msg.sender, merchant, amount);
+        emit PaymentReference(token, msg.sender, merchant, amount, keccak256(bytes(ref)), ref);
     }
 
     function _safeTransferFrom(address token, address from, address to, uint256 amount) private {

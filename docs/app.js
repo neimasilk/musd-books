@@ -5,8 +5,11 @@ import {
 import {
   MEZO_TESTNET, MEZO_MAINNET, NETWORKS, createRpc, buildStatement, formatUnits,
   isAddress, parseCsvHeader, blockAtOrAfter, getTokenInfo, getTroveSnapshot, getStabilityPoolPosition, buildLenderReport,
+  troveRisk, planTroveChange,
 } from './engine.js';
-import { DEPLOYMENTS, isLive, REGISTRY_ABI, PAY_ABI, PERMIT_ABI } from './config.js';
+import {
+  DEPLOYMENTS, isLive, REGISTRY_ABI, PAY_ABI, PERMIT_ABI, BORROWER_OPS_ABI, HINT_HELPERS_ABI, SORTED_TROVES_ABI, STABILITY_POOL_ABI,
+} from './config.js';
 
 const mk = (n, name) => defineChain({
   id: n.id,
@@ -219,40 +222,198 @@ function renderStatement(st) {
   $('anchorStatus').textContent = live ? '' : 'Registry not deployed on this network yet.';
   lastAnchors = [];
   showAnchors(st.hash, $('existingAnchors'), s.chainId).then((a) => { lastAnchors = a || []; });
-  renderTrove(s);
-  renderPool(s);
+  renderTrove(s).then((t) => renderPool(s, !!t)).then(() => { if (location.hash === '#trove' && !$('troveBox').classList.contains('hidden')) $('troveBox').scrollIntoView(); });
 }
 
-async function renderTrove(s) {
+let troveSnap = null; // last Trove reading for the statement account (drives the action preview)
+
+// The public RPC is load-balanced and a read can fail or hit a lagging node; try twice before giving up.
+async function readTwice(fn) {
+  try { return await fn(); } catch (_) { await new Promise((r) => setTimeout(r, 1500)); return fn(); }
+}
+
+// refresh = true after an action: a failed read then keeps the card that is already shown instead of hiding it.
+async function renderTrove(s, refresh = false) {
   const box = $('troveBox');
-  box.classList.add('hidden');
+  if (!refresh) { box.classList.add('hidden'); troveSnap = null; }
   try {
-    const t = await getTroveSnapshot(rpcFor(s.chainId), NETWORKS[s.chainId], s.account);
-    if (!t) return;
-    const pct = (v) => (Number(v) / 1e16).toFixed(2) + '%';
+    const t = await readTwice(() => getTroveSnapshot(rpcFor(s.chainId), NETWORKS[s.chainId], s.account));
+    if (!t) { box.classList.add('hidden'); troveSnap = null; return null; }
+    troveSnap = t;
     const stat = (k, v, sub = '') => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div>${sub ? `<div class="s">${sub}</div>` : ''}</div>`;
-    const debt = t.debt;
-    let html = stat('Status', esc(t.status)) + stat('Collateral', formatUnits(t.coll, 18).slice(0, 10) + ' BTC', t.collUsd ? '≈ $' + fmt2(t.collUsd, 18) : '') + stat('Debt', fmt2(debt, 18) + ' MUSD', `principal ${fmt2(t.principal, 18)} + interest ${formatUnits(t.interest, 18).slice(0, 8)} · ${(t.rateBp / 100).toFixed(2)}% a year`);
-    if (t.icr) html += stat('Collateral ratio', pct(t.icr), `liquidation below 110% · BTC would have to fall ${((1 - 1.1 / (Number(t.icr) / 1e18)) * 100).toFixed(1)}%`);
+    const r = troveRisk(t);
+    const pendingDebt = t.pendingDebt ? ` · includes ${fmt2(t.pendingDebt, 18)} MUSD redistributed from liquidated Troves` : '';
+    const pendingColl = t.pendingColl ? ` · includes ${formatUnits(t.pendingColl, 18).slice(0, 10)} BTC redistributed` : '';
+    let html = stat('Status', esc(t.status)) +
+      stat('Collateral', formatUnits(t.coll, 18).slice(0, 10) + ' BTC', (t.collUsd ? '≈ $' + fmt2(t.collUsd, 18) : '') + pendingColl) +
+      stat('Debt', fmt2(t.debt, 18) + ' MUSD', `principal ${fmt2(t.principal, 18)} + interest ${formatUnits(t.interest, 18).slice(0, 8)} · ${(t.rateBp / 100).toFixed(2)}% a year${pendingDebt}`);
+    if (t.icr) {
+      html += stat('Collateral ratio', r.icrPct.toFixed(2) + '%', r.liqPrice
+        ? `liquidation below 110% · at BTC ≈ $${esc(r.liqPrice)}, ${r.fallPct.toFixed(1)}% below now`
+        : `liquidation below 110% · BTC would have to fall ${r.fallPct.toFixed(1)}%`);
+    }
     $('troveStats').innerHTML = html;
+    $('troveSystem').innerHTML = t.tcr === undefined ? '' : t.recoveryMode
+      ? notice('warn', `<b>Mezo is in Recovery Mode</b> (system collateral ratio ${r.tcrPct.toFixed(2)}%, below 150%). The 110% liquidation line is unchanged, but the owner cannot withdraw collateral and new borrowing must leave the Trove at or above 150%. Repaying and adding collateral are always allowed.`)
+      : `<div class="muted" style="margin-top:8px">System: Normal Mode, total collateral ratio ${r.tcrPct.toFixed(2)}%. Recovery Mode starts below 150% (BTC about ${r.recoveryFallPct.toFixed(1)}% lower); it restricts withdrawals and new borrowing, not the 110% liquidation line.</div>`;
+    $('troveActions').classList.toggle('hidden', !t.active || !NETWORKS[s.chainId].borrowerOperations);
+    updateTrovePreview();
     box.classList.remove('hidden');
-  } catch (_) { /* a Trove panel is optional */ }
+    return t;
+  } catch (_) { /* a Trove panel is optional */ return refresh ? troveSnap : null; }
 }
 
-async function renderPool(s) {
+async function renderPool(s, hasTrove = false, refresh = false) {
   const box = $('poolBox');
-  box.classList.add('hidden');
+  if (!refresh) box.classList.add('hidden');
   try {
-    const p = await getStabilityPoolPosition(rpcFor(s.chainId), NETWORKS[s.chainId], s.account);
-    if (!p) return;
+    const p = await readTwice(() => getStabilityPoolPosition(rpcFor(s.chainId), NETWORKS[s.chainId], s.account));
+    // Shown for any pool position, and for Trove owners even without one, so they can put idle MUSD to work.
+    if (!p && !hasTrove) { box.classList.add('hidden'); return; }
     const stat = (k, v, sub = '') => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div>${sub ? `<div class="s">${sub}</div>` : ''}</div>`;
-    $('poolStats').innerHTML =
-      stat('Deposit', fmt2(p.deposit, 18) + ' MUSD', 'after liquidation losses') +
-      stat('Share of pool', p.sharePct.toFixed(4) + '%', `of ${fmt2(p.totalDeposits, 18)} MUSD`) +
-      stat('Pending BTC gain', formatUnits(p.collateralGain, 18).slice(0, 12) + ' BTC', 'from liquidated Troves');
+    $('poolStats').innerHTML = p
+      ? stat('Deposit', fmt2(p.deposit, 18) + ' MUSD', 'after liquidation losses') +
+        stat('Share of pool', p.sharePct.toFixed(4) + '%', `of ${fmt2(p.totalDeposits, 18)} MUSD`) +
+        stat('Pending BTC gain', formatUnits(p.collateralGain, 18).slice(0, 12) + ' BTC', 'from liquidated Troves')
+      : '<div class="muted">No Stability Pool deposit for this account yet.</div>';
+    $('spWithdrawBtn').disabled = !p || p.deposit === 0n;
     box.classList.remove('hidden');
   } catch (_) { /* a Stability Pool panel is optional */ }
 }
+
+// ---------- actions on Mezo from inside MUSD Books (Trove owner / pool depositor)
+const ZERO_ADDR = '0x0000000000000000000000000000000000000000';
+const amountOrZero = (v) => (AMOUNT_RE.test((v || '').trim()) ? parseUnits(v.trim(), 18) : 0n);
+
+function updateTrovePreview() {
+  const el = $('trovePreview');
+  if (!troveSnap || !troveSnap.active) { el.textContent = ''; return; }
+  const repay = amountOrZero($('repayAmt').value), addColl = amountOrZero($('collAmt').value);
+  const plan = planTroveChange(troveSnap, { repay, addColl });
+  const max = `Up to ${fmt2(plan.maxRepay, 18)} MUSD can be repaid while the Trove stays open (its net debt must stay at or above 1,800 MUSD).`;
+  if (!repay && !addColl) { el.textContent = max; return; }
+  if (plan.errors.length) { el.innerHTML = notice('warn', esc(plan.errors.join(' '))); return; }
+  const parts = [];
+  if (repay) parts.push(`repaying ${esc(formatUnits(repay, 18))} MUSD`);
+  if (addColl) parts.push(`adding ${esc(formatUnits(addColl, 18))} BTC`);
+  el.innerHTML = `After ${parts.join(' and ')}: debt ${fmt2(plan.newDebt, 18)} MUSD` +
+    (plan.newIcr ? `, collateral ratio ${(Number(plan.newIcr) / 1e16).toFixed(2)}%` : '') +
+    (plan.newLiquidationPrice ? `, liquidation at BTC ≈ $${fmt2(plan.newLiquidationPrice, 18)}` : '') +
+    '. Each button sends its own transaction.';
+}
+$('repayAmt').addEventListener('input', updateTrovePreview);
+$('collAmt').addEventListener('input', updateTrovePreview);
+
+// Position hint in the sorted Trove list for a nominal ratio (HintHelpers + SortedTroves). Zero hints are valid but cost more gas.
+async function troveHints(chainId, nicr) {
+  const n = NETWORKS[chainId], pub = clients[chainId];
+  try {
+    const size = await pub.readContract({ address: n.sortedTroves, abi: SORTED_TROVES_ABI, functionName: 'getSize' });
+    const trials = BigInt(Math.max(15, Math.min(400, Math.ceil(15 * Math.sqrt(Number(size))))));
+    const [approx] = await pub.readContract({ address: n.hintHelpers, abi: HINT_HELPERS_ABI, functionName: 'getApproxHint', args: [nicr, trials, BigInt(Date.now())] });
+    const [upper, lower] = await pub.readContract({ address: n.sortedTroves, abi: SORTED_TROVES_ABI, functionName: 'findInsertPosition', args: [nicr, approx, approx] });
+    return [upper, lower];
+  } catch (_) {
+    return [ZERO_ADDR, ZERO_ADDR];
+  }
+}
+
+// The statement account must be the connected wallet: these calls act on msg.sender's own Trove / deposit.
+async function connectOwner(s) {
+  await connect(s.chainId);
+  if (walletAccount.toLowerCase() !== s.account.toLowerCase()) {
+    throw new Error(`Connect the wallet that owns ${s.account}. The connected wallet is ${walletAccount}.`);
+  }
+}
+
+async function runAction(statusEl, buttons, fn) {
+  if (!current) return;
+  const s = current.summary, n = NETWORKS[s.chainId];
+  buttons.forEach((b) => { $(b).disabled = true; });
+  statusEl.innerHTML = '<p class="muted">Checking…</p>';
+  let ok = false;
+  try {
+    const hash = await fn(s, n, clients[s.chainId], (msg) => { statusEl.innerHTML = `<p class="muted">${msg}</p>`; });
+    statusEl.innerHTML = `<p class="muted">Submitted ${txLink(hash, n)} — waiting…</p>`;
+    const rc = await waitReceipt(clients[s.chainId], hash);
+    ok = rc.status === 'success';
+    statusEl.innerHTML = ok
+      ? notice('ok', `✔ Done in ${txLink(hash, n)}. The cards above are refreshed; generate the statement again to see the new transfer rows.`)
+      : notice('bad', `Transaction reverted: ${txLink(hash, n)}`);
+  } catch (e) {
+    statusEl.innerHTML = notice('bad', esc(e.shortMessage || e.message));
+  } finally {
+    buttons.forEach((b) => { $(b).disabled = false; });
+  }
+  if (ok) {
+    const t = await renderTrove(s, true);
+    await renderPool(s, !!t, true);
+  } else if (!$('poolStats').querySelector('.stat')) {
+    $('spWithdrawBtn').disabled = true;
+  }
+}
+
+const TROVE_BTNS = ['repayBtn', 'addCollBtn'], POOL_BTNS = ['spDepositBtn', 'spWithdrawBtn'];
+
+$('repayBtn').addEventListener('click', () => runAction($('troveActStatus'), TROVE_BTNS, async (s, n, pub, say) => {
+  if (!AMOUNT_RE.test($('repayAmt').value.trim())) throw new Error('Enter the MUSD amount to repay.');
+  const repay = parseUnits($('repayAmt').value.trim(), 18);
+  await connectOwner(s);
+  const [snap, musdBalance, minNetDebt] = await Promise.all([
+    getTroveSnapshot(rpcFor(s.chainId), n, s.account),
+    pub.readContract({ address: n.tokens.MUSD.address, abi: erc20Abi, functionName: 'balanceOf', args: [walletAccount] }),
+    pub.readContract({ address: n.borrowerOperations, abi: BORROWER_OPS_ABI, functionName: 'minNetDebt' }).catch(() => undefined),
+  ]);
+  const plan = planTroveChange(snap, { repay, musdBalance, minNetDebt });
+  if (plan.errors.length) throw new Error(plan.errors.join(' '));
+  say('Finding the Trove position hint…');
+  const [upper, lower] = await troveHints(s.chainId, plan.nicr);
+  say('Confirm the repayment in your wallet…');
+  return writeWithGas(pub, { account: walletAccount, address: n.borrowerOperations, abi: BORROWER_OPS_ABI, functionName: 'repayMUSD', args: [repay, upper, lower] });
+}));
+
+$('addCollBtn').addEventListener('click', () => runAction($('troveActStatus'), TROVE_BTNS, async (s, n, pub, say) => {
+  if (!AMOUNT_RE.test($('collAmt').value.trim())) throw new Error('Enter the BTC amount to add.');
+  const addColl = parseUnits($('collAmt').value.trim(), 18);
+  await connectOwner(s);
+  const [snap, btc] = await Promise.all([getTroveSnapshot(rpcFor(s.chainId), n, s.account), pub.getBalance({ address: walletAccount })]);
+  const plan = planTroveChange(snap, { addColl });
+  if (plan.errors.length) throw new Error(plan.errors.join(' '));
+  if (btc <= addColl) throw new Error(`The wallet holds ${formatUnits(btc, 18)} BTC; keep some for gas.`);
+  say('Finding the Trove position hint…');
+  const [upper, lower] = await troveHints(s.chainId, plan.nicr);
+  say('Confirm adding collateral in your wallet…');
+  return writeWithGas(pub, { account: walletAccount, address: n.borrowerOperations, abi: BORROWER_OPS_ABI, functionName: 'addColl', args: [upper, lower], value: addColl });
+}));
+
+$('spDepositBtn').addEventListener('click', () => runAction($('poolActStatus'), POOL_BTNS, async (s, n, pub, say) => {
+  if (!AMOUNT_RE.test($('spAmt').value.trim())) throw new Error('Enter the MUSD amount.');
+  const amount = parseUnits($('spAmt').value.trim(), 18);
+  if (amount === 0n) throw new Error('Enter an amount above zero.');
+  await connectOwner(s);
+  const musd = n.tokens.MUSD.address;
+  const bal = await pub.readContract({ address: musd, abi: erc20Abi, functionName: 'balanceOf', args: [walletAccount] });
+  if (bal < amount) throw new Error(`The wallet holds ${formatUnits(bal, 18)} MUSD, less than the deposit.`);
+  const allowance = await pub.readContract({ address: musd, abi: erc20Abi, functionName: 'allowance', args: [walletAccount, n.stabilityPool] });
+  if (allowance < amount) {
+    say('Step 1 of 2: approve the Stability Pool to take this MUSD…');
+    await waitReceipt(pub, await writeWithGas(pub, { account: walletAccount, address: musd, abi: erc20Abi, functionName: 'approve', args: [n.stabilityPool, amount] }));
+  }
+  say('Confirm the deposit in your wallet…');
+  return writeWithGas(pub, { account: walletAccount, address: n.stabilityPool, abi: STABILITY_POOL_ABI, functionName: 'provideToSP', args: [amount] });
+}));
+
+$('spWithdrawBtn').addEventListener('click', () => runAction($('poolActStatus'), POOL_BTNS, async (s, n, pub, say) => {
+  if (!AMOUNT_RE.test($('spAmt').value.trim())) throw new Error('Enter the MUSD amount.');
+  const amount = parseUnits($('spAmt').value.trim(), 18);
+  if (amount === 0n) throw new Error('Enter an amount above zero.');
+  await connectOwner(s);
+  const pos = await getStabilityPoolPosition(rpcFor(s.chainId), n, walletAccount);
+  if (!pos || pos.deposit === 0n) throw new Error('This account has no Stability Pool deposit.');
+  if (amount > pos.deposit) throw new Error(`The deposit is ${formatUnits(pos.deposit, 18)} MUSD, less than the amount.`);
+  say('Confirm the withdrawal in your wallet…');
+  return writeWithGas(pub, { account: walletAccount, address: n.stabilityPool, abi: STABILITY_POOL_ABI, functionName: 'withdrawFromSP', args: [amount] });
+}));
 
 function download(name, text, type = 'text/csv') {
   const a = document.createElement('a');
@@ -273,7 +434,9 @@ $('dlLender').addEventListener('click', async () => {
     try { pool = await getStabilityPoolPosition(rpcFor(s.chainId), NETWORKS[s.chainId], s.account); } catch (_) { /* report without a pool section */ }
     const q = new URLSearchParams({ account: s.account, from: s.fromBlock, to: s.toBlock, net: s.chainId === MEZO_MAINNET.id ? 'mainnet' : 'testnet', expect: current.hash });
     if ($('tokenSel').value === 'custom') q.set('token', s.token);
-    const md = buildLenderReport({ net: NETWORKS[s.chainId], summary: s, hash: current.hash, anchors: lastAnchors, trove, pool, reviewUrl: `${location.origin}${location.pathname}?${q}` });
+    const act = new URLSearchParams({ account: s.account, from: s.fromBlock, to: s.toBlock, net: q.get('net') });
+    const md = buildLenderReport({ net: NETWORKS[s.chainId], summary: s, hash: current.hash, anchors: lastAnchors, trove, pool, reviewUrl: `${location.origin}${location.pathname}?${q}`,
+      actionUrl: trove && trove.active ? `${location.origin}${location.pathname}?${act}#trove` : '' });
     download(baseName() + '_lender_report.md', md, 'text/markdown');
   } finally {
     $('dlLender').disabled = false;
