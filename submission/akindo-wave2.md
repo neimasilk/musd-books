@@ -2,7 +2,8 @@
 
 Status of this draft (3 Nov 2026): items 1-4 are live and tested. Decided 3 Nov: no mainnet deployment in Wave 2
 (getting BTC gas onto Mezo mainnet costs more in Ethereum fees than it is worth now; testnet is accepted by the rules).
-The remaining TODO (a real accountant) must be filled in or removed before submitting.
+Decided 4 Nov: no outside user is claimed (the user will not ask students or colleagues); the "Real use" line says so plainly.
+Still open: the 2-minute video (made once the app is frozen, around 10-11 Nov).
 Wave 2 deadline on AKINDO: **13 Nov 2026, 12:30 WIB** (05:30 UTC). The program page says Wave 2 runs to Nov 15; the
 AKINDO countdown is the one that closes the form.
 
@@ -18,7 +19,7 @@ Wave 1 review asked for four things. What changed:
 
 4. Revenue model. The contracts stay fee-free and ownerless, so a statement never depends on trusting us. Revenue comes from tools around them: (a) accountant workspace: batch monthly statements and co-attestations for many client addresses, branded PDF, reminders, priced per client per month in MUSD; (b) merchant tooling: hosted invoice pages, payment webhooks and exports to local bookkeeping software, monthly in MUSD. Both are paid through MusdPay, so our own revenue appears on a verifiable MUSD Books statement.
 
-TODO real use: name the accountant or merchant and link their anchor/co-attestation transaction, or remove this line.
+Real use: no outside accountant or merchant has used it yet. Every flow above was run end to end on Mezo Testnet by us; finding the first outside users is the first milestone below.
 
 Links: app https://neimasilk.github.io/musd-books/ · code https://github.com/neimasilk/musd-books · security notes https://github.com/neimasilk/musd-books/blob/main/SECURITY.md
 
@@ -27,7 +28,7 @@ Links: app https://neimasilk.github.io/musd-books/ · code https://github.com/ne
 - Project readiness: Testnet deployment.
 - Chain deployed on: Mezo (testnet, chain id 31611).
 - Future milestones:
-  1. December 2026: accountant workspace pilot with one practice (batch statements, co-attestation).
+  1. December 2026: first outside users: one accountant or bookkeeper piloting the workspace (batch statements, co-attestation).
   2. Q1 2027: merchant webhooks and export to local bookkeeping software.
   3. Q1 2027: MEZO and other Mezo ERC-20 statements side by side with MUSD in one report.
 - Video: TODO new 2-minute pitch covering the in-app actions.
