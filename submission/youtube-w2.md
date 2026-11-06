@@ -1,6 +1,6 @@
 # YouTube upload text for the Wave 2 pitch video
 
-File: `submission/video/out3/musdbooks-pitch-w2.mp4` (2:11, built by `submission/video/make_video_w2.py`).
+Uploaded 6 Nov 2026: https://youtu.be/bl1slN8c7cc (channel "Mukhlis Amien", amien@ubhinus.ac.id). File: `submission/video/out3/musdbooks-pitch-w2.mp4` (2:11, built by `submission/video/make_video_w2.py`).
 
 **Title:** MUSD Books, Mezo Buildathon Wave 2: act on Mezo from a verifiable MUSD statement
 

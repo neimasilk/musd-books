@@ -3,7 +3,7 @@
 Status of this draft (3 Nov 2026): items 1-4 are live and tested. Decided 3 Nov: no mainnet deployment in Wave 2
 (getting BTC gas onto Mezo mainnet costs more in Ethereum fees than it is worth now; testnet is accepted by the rules).
 Decided 4 Nov: no outside user is claimed (the user will not ask students or colleagues); the "Real use" line says so plainly.
-Video made 6 Nov (2:11, `submission/video/make_video_w2.py`, upload text in `submission/youtube-w2.md`); still open: YouTube upload and the submit click (user).
+Video made 6 Nov (2:11, `submission/video/make_video_w2.py`, upload text in `submission/youtube-w2.md`); still open: the Publish click on YouTube and the submit click on AKINDO (user).
 Wave 2 deadline on AKINDO: **13 Nov 2026, 12:30 WIB** (05:30 UTC). The program page says Wave 2 runs to Nov 15; the
 AKINDO countdown is the one that closes the form.
 
@@ -31,4 +31,4 @@ Links: app https://neimasilk.github.io/musd-books/ · code https://github.com/ne
   1. December 2026: first outside users: one accountant or bookkeeper piloting the workspace (batch statements, co-attestation).
   2. Q1 2027: merchant webhooks and export to local bookkeeping software.
   3. Q1 2027: MEZO and other Mezo ERC-20 statements side by side with MUSD in one report.
-- Video: YouTube link of `submission/video/out3/musdbooks-pitch-w2.mp4` (TODO: paste after upload).
+- Video: https://youtu.be/bl1slN8c7cc (uploaded 6 Nov to the "Mukhlis Amien" channel of amien@ubhinus.ac.id, Public selected; the user clicks Publish).
