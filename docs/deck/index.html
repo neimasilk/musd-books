@@ -114,8 +114,32 @@
     <div class="card"><b>Stability Pool position.</b> Next to the Trove, the app reads the account's deposit in the Mezo Stability Pool: value after liquidation losses, share of the pool and pending BTC gain. A deposit leaves the wallet balance, so this says what it is worth now. Checked with a real testnet deposit.</div>
     <div class="card"><b>Security work.</b> 27 Foundry tests including fuzz and invariant suites (128,000 random calls each), a hook-token test, Slither (nothing high or medium) and a written self-review with severities and limits: SECURITY.md.</div>
   </div>
-  <p class="muted">Each item has an automated test in the repository. Next: mainnet deployment of the registry and <code>MusdPay</code>, after review and the owner's approval.</p>
+  <p class="muted">Each item has an automated test in the repository. Wave 2 additions are on the next slide.</p>
   <p class="muted">Built by Claude (Anthropic) for its human owner, who holds the accounts and submits the project. Disclosed in the README.</p>
+</section>
+
+<section>
+  <h2>Wave 2: act on Mezo from the statement</h2>
+  <div class="grid">
+    <div class="card"><b>Repay and add collateral.</b> Next to a statement, the Trove owner repays MUSD or adds BTC through <code>BorrowerOperations</code>, with list hints from <code>HintHelpers</code> and <code>SortedTroves</code>. A preview shows the new debt, collateral ratio and liquidation price first.</div>
+    <div class="card"><b>Stability Pool.</b> Deposit or withdraw MUSD (<code>provideToSP</code> / <code>withdrawFromSP</code>) from the same page, with approval handled when needed.</div>
+    <div class="card"><b>Guard rails.</b> The preview refuses what the protocol would reject: net debt below the minimum, repaying more than debt minus gas compensation, the wrong wallet, a low balance. Nothing reaches the wallet.</div>
+    <div class="card"><b>Trove panel fixed.</b> Pending redistribution rewards are no longer counted twice. The panel shows the liquidation price, the system TCR and the mode. Recovery Mode keeps the 110% line; it blocks collateral withdrawals and limits new debt.</div>
+    <div class="card"><b>Verified and hardened.</b> <code>StatementRegistry</code> and <code>MusdPay</code> are verified on the Mezo Testnet explorer. Version 2 adds a reentrancy lock and overflow-free pagination; 28 Foundry tests pass.</div>
+    <div class="card"><b>Tested onchain.</b> A scripted wallet drives the real page on Mezo Testnet: repay, add collateral, deposit and withdraw, each checked onchain afterwards (18 checks), plus 24 offline Trove tests.</div>
+  </div>
+</section>
+
+<section>
+  <h2>Business model and honest status</h2>
+  <div class="grid">
+    <div class="card"><b>Free, ownerless contracts.</b> The registry and <code>MusdPay</code> take no fee and have no owner, so a statement never depends on trusting us.</div>
+    <div class="card"><b>Accountant workspace.</b> Batch monthly statements and co-attestations for many client addresses, branded PDF, reminders. Priced per client per month, in MUSD.</div>
+    <div class="card"><b>Merchant tooling.</b> Hosted invoice pages, payment webhooks and exports to local bookkeeping software. Monthly, in MUSD.</div>
+    <div class="card"><b>Paid through MusdPay.</b> Our own revenue appears on a verifiable MUSD Books statement.</div>
+    <div class="card"><b>Status today.</b> Mezo Testnet only. No outside accountant or merchant has used it yet; every flow was run end to end by us.</div>
+    <div class="card"><b>Next.</b> December 2026: a first outside bookkeeper piloting the workspace. Q1 2027: merchant webhooks and exports, MEZO statements beside MUSD, mainnet deployment of version 2.</div>
+  </div>
 </section>
 
 </body>
