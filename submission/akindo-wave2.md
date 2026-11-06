@@ -3,7 +3,7 @@
 Status of this draft (3 Nov 2026): items 1-4 are live and tested. Decided 3 Nov: no mainnet deployment in Wave 2
 (getting BTC gas onto Mezo mainnet costs more in Ethereum fees than it is worth now; testnet is accepted by the rules).
 Decided 4 Nov: no outside user is claimed (the user will not ask students or colleagues); the "Real use" line says so plainly.
-Video made 6 Nov and published (2:11, `submission/video/make_video_w2.py`, upload text in `submission/youtube-w2.md`). 7 Nov: product page updated on AKINDO (video link, Wave 2 section, Limits line; description cap is 6,000 characters, so the two 17 Oct update sections were condensed), and the Wave 2 dialog filled; only the "Submit the product" click remains (user).
+Video made 6 Nov and published (2:11, `submission/video/make_video_w2.py`, upload text in `submission/youtube-w2.md`). 7 Nov: product page updated on AKINDO (video link, Wave 2 section, Limits line; description cap is 6,000 characters, so the two 17 Oct update sections were condensed), and the Wave 2 dialog filled; **submitted by the user 7 Nov 2026 05:54 WIB** (API: Wave 2 submission, 2,787 characters).
 Wave 2 deadline on AKINDO: **13 Nov 2026, 12:30 WIB** (05:30 UTC). The program page says Wave 2 runs to Nov 15; the
 AKINDO countdown is the one that closes the form.
 
