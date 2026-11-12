@@ -1,0 +1,17 @@
+{
+  "chainId": 31612,
+  "deployer": "0x444156722777F12f29F789F04fe9EAA5e90B10a9",
+  "rpc": "https://mezo-mainnet.boar.network",
+  "StatementRegistry": {
+    "address": "0x431785e21f9224c53aa37108d14cfa865279d23c",
+    "block": 13186810,
+    "tx": "0xbc6017f7c01b8f7cc6f03a3fbfe01549eabc225ed824d63c3381393b1ae43f99",
+    "gasUsed": 733092
+  },
+  "MusdPay": {
+    "address": "0x5fa72a1821254a49d7c0af692115a4dabe81921a",
+    "block": 13186811,
+    "tx": "0xc0a1dd99db93608ca778fcb914e72886d8a99b9e56b417f65dd6547e2736fa07",
+    "gasUsed": 404047
+  }
+}

@@ -31,17 +31,19 @@ export function parseArgs(argv = process.argv.slice(2)) {
 
 export const TESTNET_RPC = 'https://rpc.test.mezo.org';
 
+export const MAINNET_RPC = 'https://mezo-mainnet.boar.network';
+
 export function makeChain(rpcUrl, id = 31611) {
   return defineChain({
     id,
-    name: 'Mezo Testnet',
+    name: id === 31612 ? 'Mezo' : 'Mezo Testnet',
     nativeCurrency: { name: 'Bitcoin', symbol: 'BTC', decimals: 18 },
     rpcUrls: { default: { http: [rpcUrl] } },
   });
 }
 
-export function clientsFor(rpcUrl, privateKey) {
-  const chain = makeChain(rpcUrl);
+export function clientsFor(rpcUrl, privateKey, chainId = 31611) {
+  const chain = makeChain(rpcUrl, chainId);
   const account = privateKeyToAccount(privateKey.startsWith('0x') ? privateKey : '0x' + privateKey);
   return {
     chain, account,
