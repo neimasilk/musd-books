@@ -30,6 +30,10 @@ const CORE_MAINNET = {
   '0x391ecc7ffefc48cff41d0f2bb36e38b82180b993': 'Mezo PCV',
   '0x73245eff485ab3aac1158b3c4d8f4b23797b0e32': 'Mezo StabilityPool',
   '0x94afb503dbca74ac3e4929baceedfce19b93c193': 'Mezo TroveManager',
+  // Venues a holder meets when moving MUSD in and out (checked onchain: token0/token1, explorer contract names).
+  '0x1d6e8d24c133535f2d00676f66a0e824f84765ff': 'Tigris MEZO/MUSD pool',
+  '0x9cbc1537d255768b431488305b1c7efc2ac95022': 'Tigris BTC/MUSD pool',
+  '0x50f11fe8b0d2b6f18a12291fed345914d7ec69d3': 'Wormhole NTT (MUSD bridge)',
 };
 
 export const MEZO_TESTNET = {
