@@ -1,0 +1,15 @@
+Declared goals: (1) accountant flow, (2) Trove report and (3) "Pay with wallet" testing were delivered early, during Wave 1 (17 Oct: review link with co-attestation, lender report with a Trove section, scripted-wallet tests of permit and approve paths). (4) Mainnet: done 13 Nov (see 3). Wave 2 work followed the Wave 1 review:
+
+1. Act on Mezo from inside MUSD Books. Next to a statement, the Trove owner can repay MUSD or add BTC collateral (BorrowerOperations.repayMUSD / addColl, hints from HintHelpers and SortedTroves) and deposit or withdraw MUSD in the Stability Pool (provideToSP / withdrawFromSP). A preview shows the new debt, collateral ratio and liquidation price, and refuses what the protocol would reject (net debt below minNetDebt, over-repaying, wrong wallet, low balance). Tested end to end on Mezo Testnet with a scripted wallet, every call checked onchain (test/trove_actions_test.py). The video shows a real repay and a real Stability Pool deposit made in the app.
+
+2. Trove panel fixed. getEntireDebtAndColl already includes pending redistribution rewards; Wave 1 added them twice. Panel and lender report now use the returned totals, name the redistributed part, and show liquidation price, system TCR and mode. Recovery Mode does not move the 110% liquidation line in MUSD; it blocks collateral withdrawals and limits new debt, and the app says so. 24 offline tests (test/trove.test.mjs).
+
+3. Contracts verified, hardened and on mainnet. v2 adds a reentrancy lock to MusdPay and overflow-free pagination (28 Foundry tests). Since 13 Nov v2 is live and verified on Mezo mainnet: StatementRegistry 0x431785e21f9224c53aa37108d14cfa865279d23c, MusdPay 0x5fa72a1821254a49d7c0af692115a4dabe81921a. The first real mainnet statement (the builder's own Wave 1 reward: Tigris swap, Wormhole bridge, 0 unexplained) is anchored onchain; re-derive link on the product page.
+
+4. Revenue model. Contracts stay fee-free and ownerless, so a statement never depends on trusting us. Revenue comes from tools around them: an accountant workspace (batch monthly statements and co-attestations for many client addresses, branded PDF, reminders; per client per month in MUSD) and merchant tooling (hosted invoices, payment webhooks, exports to local bookkeeping software; monthly in MUSD). Both are paid through MusdPay, so our own revenue appears on a verifiable MUSD Books statement.
+
+Real use: no outside accountant or merchant yet. The flows were run end to end by us on testnet, and our own reward statement on mainnet; first outside users are the next milestone.
+
+Track 2 (Access and Distribution) · Mezo mainnet 31612 + testnet 31611 · Solo builder (GitHub neimasilk), built with Claude (Anthropic)
+Video (2:11): https://youtu.be/bl1slN8c7cc · Deck: https://neimasilk.github.io/musd-books/deck/
+App: https://neimasilk.github.io/musd-books/ · Code: https://github.com/neimasilk/musd-books · Security notes: https://github.com/neimasilk/musd-books/blob/main/SECURITY.md
