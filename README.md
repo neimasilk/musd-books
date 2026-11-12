@@ -25,7 +25,13 @@ MUSD Books turns any Mezo address into a bookkeeping-grade statement for MUSD (o
   states the system mode: in MUSD, Recovery Mode (TCR below 150%) does not move the 110% liquidation line, it blocks
   collateral withdrawals and limits new borrowing. Offline tests pin both (`node test/trove.test.mjs`).
 - **Contracts verified** on the Mezo Testnet explorer, and **version 2** of both contracts (reentrancy lock on
-  payments, overflow-free pagination) ready for mainnet. See [SECURITY.md](SECURITY.md).
+  payments, overflow-free pagination). See [SECURITY.md](SECURITY.md).
+- **On Mezo mainnet (13 Nov 2026).** The v2 contracts are deployed and verified on explorer.mezo.org (addresses under
+  Deployments). The first real mainnet statement is the builder's own Wave 1 reward: MEZO to MUSD on Tigris, then
+  bridged out through Wormhole NTT. It has 6 transfers, is fully reconciled with 0 unexplained, and is anchored
+  onchain from the owner's wallet ([anchor tx](https://explorer.mezo.org/tx/0xc788baefbb176764045b7c0f750a1cee8d5ff7c58dcfa79c7b128c93def9bcd2)).
+  [Re-derive it in your browser](https://neimasilk.github.io/musd-books/?account=0x0428b16c99eff57268e69e5eb93aacce18711ba5&from=13141300&to=13141700&net=mainnet&expect=0x6ae6126d54386e2040f7ac190bd005fca9f3583f419ad7c961d2f32afc787586).
+  The app also labels the Tigris pools and the Wormhole NTT bridge.
 
 ## Why
 
@@ -84,14 +90,17 @@ python test/trove_actions_test.py   # repay, add collateral, Stability Pool depo
 
 ## Deployments
 
-See `deployments.json` (written by `scripts/deploy.mjs`) and `docs/config.js`.
+See `deployments.json` (testnet) and `deployments.mainnet.json` (mainnet), both written by `scripts/deploy.mjs`
+(`--mainnet` for chain 31612), and `docs/config.js`. Contracts are verified with `scripts/verify_blockscout.mjs`.
 
-| Item | Value |
-|---|---|
-| Network | Mezo Testnet (chain id 31611) |
-| MUSD (testnet) | `0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503` |
-| StatementRegistry | see `deployments.json` |
-| MusdPay | see `deployments.json` |
+| Item | Mezo Mainnet (31612) | Mezo Testnet (31611) |
+|---|---|---|
+| Version | v2 | v1 |
+| StatementRegistry | [`0x431785e21f9224c53aa37108d14cfa865279d23c`](https://explorer.mezo.org/address/0x431785e21f9224c53aa37108d14cfa865279d23c) | `0x431785e21f9224c53aa37108d14cfa865279d23c` |
+| MusdPay | [`0x5fa72a1821254a49d7c0af692115a4dabe81921a`](https://explorer.mezo.org/address/0x5fa72a1821254a49d7c0af692115a4dabe81921a) | `0x5fa72a1821254a49d7c0af692115a4dabe81921a` |
+| MUSD | `0xdD468A1DDc392dcdbEf6db6e34E89AA338F9F186` | `0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503` |
+
+The addresses match across networks because the same deployer used the same nonces.
 
 ## Repository layout
 
@@ -107,8 +116,8 @@ test/        Engine, report, pool and browser tests (live read-only ones include
 
 - MUSD Books is a bookkeeping aid, not tax or legal advice.
 - Statements cover one token per address and period. Native BTC (gas) is not included.
-- The hackathon build is deployed on Mezo testnet; mainnet deployment is a configuration change.
-- Counterparty names come from a frozen table of core Mezo contracts; unknown addresses are shown as addresses.
+- Mainnet use so far is the builder's own; no outside accountant or merchant has used it yet.
+- Counterparty names come from a frozen table of core Mezo contracts plus the Tigris MUSD pools and the Wormhole NTT bridge; unknown addresses are shown as addresses.
 
 ## AI assistance disclosure
 

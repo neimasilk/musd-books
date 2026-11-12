@@ -1,17 +1,19 @@
-# Wave 2 addendum (draft, 13 Nov 2026)
+# Wave 2 addendum (13 Nov 2026)
 
-Purpose: add to the AKINDO product page (or post as a comment on it) before judging starts. The Wave 2 submission deadline in the API is 15 Nov 2026 15:00 UTC (22:00 WIB).
+This text goes on the AKINDO product page before judging starts. The Wave 2 submission deadline in the API is 15 Nov 2026 15:00 UTC (22:00 WIB).
 
-The text answers two Wave 1 review points that the Wave 2 update left open: "mainnet" and "real users".
+It answers the Wave 1 review points that the Wave 2 update had left open: "verify MusdPay and StatementRegistry, deploy mainnet" and "show real use".
 
-## Variant A (no spend; ready now)
+## Text to paste
 
-**Mainnet check (13 Nov).** MUSD Books now reads Mezo mainnet. Its first real mainnet statement covers the builder's own Wave 1 reward: MEZO swapped to MUSD on Tigris, then bridged out through Wormhole NTT. The statement has 6 MUSD transfers, is fully reconciled with zero unexplained, and labels each counterparty (Tigris MEZO/MUSD pool, Tigris BTC/MUSD pool, Wormhole NTT). Anyone can re-derive it in the browser from chain data and compare the hash: https://neimasilk.github.io/musd-books/?account=0x0428b16c99eff57268e69e5eb93aacce18711ba5&from=13141300&to=13141700&net=mainnet&expect=0xcb4b90f9ac3290c85429e7d06142df12f5b241f1c45617064874c06d60b1e064
+**Update, 13 Nov: MUSD Books is on Mezo mainnet**
 
-This is the builder's own use, not an outside user. The StatementRegistry and MusdPay contracts are still testnet only.
-
-## Variant B (only if the user approves a mainnet deploy, about 1.8e-6 BTC ≈ $0.17 gas)
-
-Same text as A, plus:
-
-**v2 contracts on Mezo mainnet.** StatementRegistry `<addr>` and MusdPay `<addr>` are deployed and verified. The reward statement above is anchored onchain (tx `<hash>`), so its hash can be checked against the registry from the review link.
+- **Contracts:** the v2 contracts (with the reentrancy lock) are deployed on Mezo mainnet and verified on explorer.mezo.org.
+  - StatementRegistry: https://explorer.mezo.org/address/0x431785e21f9224c53aa37108d14cfa865279d23c
+  - MusdPay: https://explorer.mezo.org/address/0x5fa72a1821254a49d7c0af692115a4dabe81921a
+- **First real mainnet statement, anchored onchain.** It covers the builder's own Wave 1 reward: MEZO swapped to MUSD on Tigris, then bridged out through Wormhole NTT.
+  - The statement has 6 MUSD transfers. It is fully reconciled, with zero unexplained.
+  - Each counterparty is labelled (Tigris MEZO/MUSD pool, Tigris BTC/MUSD pool, Wormhole NTT).
+  - Anchor tx: https://explorer.mezo.org/tx/0xc788baefbb176764045b7c0f750a1cee8d5ff7c58dcfa79c7b128c93def9bcd2
+- **Check it yourself.** The link below makes your browser re-derive the statement from chain data, compare its hash, and show the onchain anchor: https://neimasilk.github.io/musd-books/?account=0x0428b16c99eff57268e69e5eb93aacce18711ba5&from=13141300&to=13141700&net=mainnet&expect=0x6ae6126d54386e2040f7ac190bd005fca9f3583f419ad7c961d2f32afc787586
+- **Honest status:** this is the builder's own use, not an outside user yet. The deploy gas was 0.0000017 BTC.
