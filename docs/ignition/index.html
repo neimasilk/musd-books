@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MUSD Books: Ignition deck</title>
+<link rel="icon" type="image/png" href="../assets/favicon.png" />
+<style>
+  :root { --bg:#0b1220; --panel:#121c33; --ink:#eef2fa; --muted:#9fb0cf; --teal:#2dbeaa; --orange:#f7931a; --line:#243252; }
+  * { box-sizing: border-box; }
+  html { scroll-snap-type: y mandatory; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:18px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  section { min-height:100vh; scroll-snap-align:start; padding:7vh 8vw; display:flex; flex-direction:column; justify-content:center; border-bottom:1px solid var(--line); }
+  h1 { font-size:clamp(34px,6vw,64px); margin:0 0 12px; letter-spacing:-.02em; }
+  h2 { font-size:clamp(26px,4vw,40px); margin:0 0 18px; color:var(--teal); }
+  p, li { max-width:66ch; }
+  .muted { color:var(--muted); }
+  .big { font-size:clamp(20px,2.6vw,28px); color:var(--muted); max-width:36ch; }
+  .grid { display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); margin-top:12px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
+  .card b { color:var(--orange); }
+  .num { font-size:34px; font-weight:700; color:var(--teal); font-variant-numeric:tabular-nums; }
+  code { background:#1a2745; padding:1px 6px; border-radius:6px; font-size:.9em; }
+  a { color:var(--teal); } .mono { font-family:ui-monospace,Consolas,monospace; font-size:14px; word-break:break-all; }
+  .brand { display:flex; align-items:center; gap:16px; margin-bottom:18px; } .brand img { width:72px; height:72px; border-radius:18px; }
+  table { border-collapse:collapse; width:100%; max-width:1100px; margin-top:8px; font-size:16px; }
+  th, td { text-align:left; vertical-align:top; padding:10px 12px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; }
+  td b { color:var(--orange); }
+  .tablewrap { overflow-x:auto; }
+  @media print { html { scroll-snap-type:none; } section { min-height:auto; page-break-after:always; border:0; } }
+</style>
+</head>
+<body>
+
+<section>
+  <div class="brand"><img src="../assets/icon-256.png" alt="logo" /><div class="muted">Mezo Ignition Program · application deck · November 2026</div></div>
+  <h1>MUSD Books</h1>
+  <p class="big">Verifiable books for MUSD: statements, invoice references and onchain proof.</p>
+  <p class="muted">Live on Mezo mainnet since 13 Nov 2026 · open source (MIT) · <a href="https://neimasilk.github.io/musd-books/">neimasilk.github.io/musd-books</a></p>
+</section>
+
+<section>
+  <h2>The problem</h2>
+  <p>Mezo lets people <b>borrow MUSD against Bitcoin</b> instead of selling it, and MUSD is a stablecoin people can pay and get paid in. The borrower, the business paid in MUSD, and their accountant or lender then all need the same record, and it has to be one a third party can check.</p>
+  <div class="grid">
+    <div class="card"><b>Explorers</b> show raw logs. Nobody can hand an auditor a log.</div>
+    <div class="card"><b>Spreadsheets</b> from one party prove nothing to another party.</div>
+    <div class="card"><b>A transfer has no invoice number</b>, so matching payments to orders is manual.</div>
+  </div>
+</section>
+
+<section>
+  <h2>What exists today</h2>
+  <div class="grid">
+    <div class="card"><b>Statement engine</b> (browser only, no backend). Every <code>Transfer</code> counted once in <code>BigInt</code>, reconciled to the last unit against <code>balanceOf</code> at the opening and closing blocks. Mint = loan draw, burn = repayment, core Mezo contracts named.</div>
+    <div class="card"><b>MusdPay</b>. Moves MUSD payer → merchant and emits a <code>PaymentReference</code> (invoice number) right after the token's <code>Transfer</code>. One transaction with permit. No owner, no fee.</div>
+    <div class="card"><b>StatementRegistry</b>. The hash of the deterministic CSV is anchored onchain; accountant and owner can co-attest the same hash. Anyone can re-derive the statement from chain data.</div>
+    <div class="card"><b>Act on Mezo</b>. Next to the statement, a Trove owner can repay MUSD, add BTC collateral, and deposit to or withdraw from the Stability Pool, with a preview that refuses what the protocol would reject.</div>
+  </div>
+</section>
+
+<section>
+  <h2>Status and proof</h2>
+  <div class="grid">
+    <div class="card"><div class="num">mainnet</div>v2 contracts deployed and verified on explorer.mezo.org (13 Nov 2026).</div>
+    <div class="card"><div class="num">0</div>unexplained difference in the first real mainnet statement (6 transfers: Tigris swap, Wormhole NTT bridge), anchored onchain.</div>
+    <div class="card"><div class="num">28</div>Foundry tests (unit, fuzz, invariant), Slither with nothing high or medium, written self-review in SECURITY.md.</div>
+    <div class="card"><div class="num">2</div>Mezo Buildathon waves on AKINDO: Wave 1 rewarded, Wave 2 submitted.</div>
+  </div>
+  <p class="mono" style="margin-top:16px">StatementRegistry 0x431785e21f9224c53aa37108d14cfa865279d23c<br />MusdPay 0x5fa72a1821254a49d7c0af692115a4dabe81921a</p>
+  <p class="muted"><a href="https://neimasilk.github.io/musd-books/?account=0x0428b16c99eff57268e69e5eb93aacce18711ba5&amp;from=13141300&amp;to=13141700&amp;net=mainnet&amp;expect=0x6ae6126d54386e2040f7ac190bd005fca9f3583f419ad7c961d2f32afc787586">Re-derive the mainnet statement in your browser</a> · <a href="https://github.com/neimasilk/musd-books">Source code</a></p>
+  <p class="muted"><b>Honest status:</b> no outside users yet. Every flow has been run by us, on testnet and with our own funds on mainnet. Getting the first outside users is the main goal of this roadmap.</p>
+</section>
+
+<section>
+  <h2>3-month roadmap (Dec 2026 – Feb 2027)</h2>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Milestone</th><th>What ships</th><th>How you can check it</th></tr>
+    <tr><td><b>M1 · testnet</b><br />by 31 Dec 2026</td>
+        <td><b>InvoiceRegistry</b> contract: a merchant posts an invoice (amount, due date, metadata hash), the customer pays it through MusdPay, and the invoice is marked paid onchain. A static <b>hosted invoice page</b> (no backend). <b>Accountant workspace beta</b>: batch statements for a list of client addresses, co-attestation requests, PDF export.</td>
+        <td>Contract verified on the testnet explorer; open test plan; at least 5 testers from the Mezo community, with their feedback published in the repo.</td></tr>
+    <tr><td><b>M2 · mainnet</b><br />by 31 Jan 2027</td>
+        <td>InvoiceRegistry on mainnet; workspace and invoice page pointed at mainnet; fixes from M1 feedback.</td>
+        <td>Contract verified on explorer.mezo.org; at least <b>3 outside addresses</b> that anchored a statement or issued a paid invoice (events from addresses that are not ours).</td></tr>
+    <tr><td><b>M3 · adoption</b><br />by 28 Feb 2027</td>
+        <td><b>Statement engine as an npm package</b>, so other Mezo dApps can embed verifiable MUSD statements; a public metrics page computed from chain data.</td>
+        <td>Package published; at least <b>10 outside addresses</b> using StatementRegistry, InvoiceRegistry or MusdPay; metrics page anyone can re-run.</td></tr>
+  </table>
+  </div>
+  <p class="muted">Each milestone can be checked from public data (contract events, verified source, the repository), not from our own reporting.</p>
+</section>
+
+<section>
+  <h2>Why this matters for Mezo</h2>
+  <ul>
+    <li><b>MUSD as money needs books.</b> A business that accepts MUSD has to show its accountant what came in. Without a checkable record, MUSD stays something people only trade.</li>
+    <li><b>Borrowers need proof for lenders.</b> A Trove owner can hand over a statement plus a live Trove report that the lender verifies without trusting the borrower.</li>
+    <li><b>Free public infrastructure.</b> The contracts take no fee and have no owner, so any Mezo wallet, merchant tool or dApp can use them. Revenue, later, comes from optional tools around them (accountant workspace, merchant tooling), paid in MUSD through MusdPay.</li>
+    <li><b>Nothing like it on Mezo yet.</b> Explorers show logs; MUSD Books gives a reconciled statement and an invoice trail that a third party can verify.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Team and support asked</h2>
+  <p><b>Solo builder</b> (GitHub <a href="https://github.com/neimasilk">neimasilk</a>, Telegram @neimasilk), based in Indonesia. Built with AI assistance (Claude by Anthropic), disclosed in the README. Every claim in this deck is reproducible from the repository.</p>
+  <div class="grid">
+    <div class="card"><b>Grant</b>: milestone-based, as the program describes. M1 on the testnet deployment, M2 on the mainnet deployment, M3 on the adoption targets.</div>
+    <div class="card"><b>Devrel</b>: a review of the InvoiceRegistry design before mainnet, and introductions to Mezo merchants or wallets that could try it.</div>
+    <div class="card"><b>Visibility</b>: a slot in a builder channel or demo day to recruit the first testers.</div>
+  </div>
+</section>
+
+</body>
+</html>
