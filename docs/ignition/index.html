@@ -38,6 +38,7 @@
   <h1>MUSD Books</h1>
   <p class="big">Verifiable books for MUSD: statements, invoice references and onchain proof.</p>
   <p class="muted">Live on Mezo mainnet since 13 Nov 2026 · open source (MIT) · <a href="https://neimasilk.github.io/musd-books/">neimasilk.github.io/musd-books</a></p>
+  <p class="muted">Mezo Buildathon complete: rewarded in both waves (Wave 1 US$16, Wave 2 US$30).</p>
 </section>
 
 <section>
@@ -56,7 +57,7 @@
     <div class="card"><b>Statement engine</b> (browser only, no backend). Every <code>Transfer</code> counted once in <code>BigInt</code>, reconciled to the last unit against <code>balanceOf</code> at the opening and closing blocks. Mint = loan draw, burn = repayment, core Mezo contracts named.</div>
     <div class="card"><b>MusdPay</b>. Moves MUSD payer → merchant and emits a <code>PaymentReference</code> (invoice number) right after the token's <code>Transfer</code>. One transaction with permit. No owner, no fee.</div>
     <div class="card"><b>StatementRegistry</b>. The hash of the deterministic CSV is anchored onchain; accountant and owner can co-attest the same hash. Anyone can re-derive the statement from chain data.</div>
-    <div class="card"><b>Act on Mezo</b>. Next to the statement, a Trove owner can repay MUSD, add BTC collateral, and deposit to or withdraw from the Stability Pool, with a preview that refuses what the protocol would reject.</div>
+    <div class="card"><b>Act on Mezo</b>. Next to the statement, a Trove owner can repay MUSD, add BTC collateral, and deposit to or withdraw from the Stability Pool, with a preview that refuses what the protocol would reject (including a Trove change that would end below the 110% minimum collateral ratio, and a pool withdrawal while any Trove is below 110%).</div>
   </div>
 </section>
 
@@ -66,7 +67,7 @@
     <div class="card"><div class="num">mainnet</div>v2 contracts deployed and verified on explorer.mezo.org (13 Nov 2026).</div>
     <div class="card"><div class="num">0</div>unexplained difference in the first real mainnet statement (6 transfers: Tigris swap, Wormhole NTT bridge), anchored onchain.</div>
     <div class="card"><div class="num">28</div>Foundry tests (unit, fuzz, invariant), Slither with nothing high or medium, written self-review in SECURITY.md.</div>
-    <div class="card"><div class="num">2</div>Mezo Buildathon waves on AKINDO: Wave 1 rewarded, Wave 2 submitted.</div>
+    <div class="card"><div class="num">2 / 2</div><b>Buildathon complete.</b> Mezo Buildathon on AKINDO: Wave 1 reward US$16; Wave 2 reward US$30 (paid 24 Nov 2026, top ~27% of 165 submissions).</div>
   </div>
   <p class="mono" style="margin-top:16px">StatementRegistry 0x431785e21f9224c53aa37108d14cfa865279d23c<br />MusdPay 0x5fa72a1821254a49d7c0af692115a4dabe81921a</p>
   <p class="muted"><a href="https://neimasilk.github.io/musd-books/?account=0x0428b16c99eff57268e69e5eb93aacce18711ba5&amp;from=13141300&amp;to=13141700&amp;net=mainnet&amp;expect=0x6ae6126d54386e2040f7ac190bd005fca9f3583f419ad7c961d2f32afc787586">Re-derive the mainnet statement in your browser</a> · <a href="https://github.com/neimasilk/musd-books">Source code</a></p>
