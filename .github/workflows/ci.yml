@@ -31,3 +31,5 @@ jobs:
         run: node test/pool.test.mjs
       - name: Lender report
         run: node test/report.test.mjs
+      - name: Trove reading, action preview and the 110% rule
+        run: node test/trove.test.mjs

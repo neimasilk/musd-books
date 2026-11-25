@@ -14,6 +14,18 @@ MUSD Books turns any Mezo address into a bookkeeping-grade statement for MUSD (o
 
 > It extends the author's earlier project [ArcBooks](https://github.com/neimasilk/arcbooks) (the same idea on Arc). The statement engine was rewritten for Mezo during Wave 1 of the Mezo Buildathon: ERC-20 logs instead of a native-token emitter, `balanceOf` instead of native balances, a new payment-reference contract, Mezo labels, and a token field in the registry.
 
+## After the Wave 2 review (25 Nov 2026)
+
+- **110% check in the Trove preview.** Repaying or adding collateral shows the Trove's new collateral ratio, computed the
+  way `BorrowerOperations` does it (new collateral x `PriceFeed.fetchPrice()` / new debt). In Normal Mode Mezo rejects
+  any change that leaves a Trove below 110% (`MCR`), even a repayment or a top-up, so the app refuses it before the
+  wallet opens and names the top-up that would reach 110%. When both amounts are entered, it says which button to press
+  first, because each one is a separate transaction checked on its own.
+- **Stability Pool withdrawal pre-check.** Mezo's `StabilityPool.withdrawFromSP` reverts while the lowest Trove is below
+  110%. The app reads `SortedTroves.getLast`, `PriceFeed.fetchPrice` and `TroveManager.getCurrentICR` first and says
+  why withdrawals are paused instead of sending a transaction that would fail.
+- Offline tests for both (`node test/trove.test.mjs`, `node test/pool.test.mjs`), now also run in CI.
+
 ## New in Wave 2
 
 - **Act on Mezo from inside MUSD Books.** Next to a statement, the Trove owner can repay MUSD or add BTC collateral

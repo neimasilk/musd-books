@@ -5,7 +5,7 @@ import {
 import {
   MEZO_TESTNET, MEZO_MAINNET, NETWORKS, createRpc, buildStatement, formatUnits,
   isAddress, parseCsvHeader, blockAtOrAfter, getTokenInfo, getTroveSnapshot, getStabilityPoolPosition, buildLenderReport,
-  troveRisk, planTroveChange,
+  troveRisk, planTroveChange, troveStepOrder, ratioPct, checkStabilityPoolWithdrawal, MCR,
 } from './engine.js';
 import {
   DEPLOYMENTS, isLive, REGISTRY_ABI, PAY_ABI, PERMIT_ABI, BORROWER_OPS_ABI, HINT_HELPERS_ABI, SORTED_TROVES_ABI, STABILITY_POOL_ABI,
@@ -67,8 +67,16 @@ function showTab(name) {
   for (const t of ['statement', 'verify', 'request', 'about', 'pay']) $('tab-' + t).classList.toggle('hidden', t !== name);
 }
 document.querySelectorAll('nav button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
-$('aboutRegistry').textContent = isLive(dep(MEZO_TESTNET.id).registry) ? `${dep(MEZO_TESTNET.id).registry} (Mezo Testnet)` : '(not yet deployed)';
-$('aboutPay').textContent = isLive(dep(MEZO_TESTNET.id).pay) ? `${dep(MEZO_TESTNET.id).pay} (Mezo Testnet)` : '(not yet deployed)';
+// Where each contract is live, with its version (mainnet runs v2; testnet runs v1 at the same addresses).
+function deployedText(key) {
+  const live = [MEZO_MAINNET, MEZO_TESTNET].filter((x) => DEPLOYMENTS[x.id] && isLive(DEPLOYMENTS[x.id][key]));
+  if (!live.length) return '(not yet deployed)';
+  const where = (x) => (x.id === MEZO_MAINNET.id ? 'Mezo mainnet' : 'Mezo Testnet') + (DEPLOYMENTS[x.id].version ? `, v${DEPLOYMENTS[x.id].version}` : '');
+  const same = new Set(live.map((x) => DEPLOYMENTS[x.id][key].toLowerCase())).size === 1;
+  return same ? `${DEPLOYMENTS[live[0].id][key]} (${live.map(where).join('; ')})` : live.map((x) => `${DEPLOYMENTS[x.id][key]} (${where(x)})`).join(' · ');
+}
+$('aboutRegistry').textContent = deployedText('registry');
+$('aboutPay').textContent = deployedText('pay');
 
 // ---------- wallet
 let walletClient = null, walletAccount = null;
@@ -248,9 +256,11 @@ async function renderTrove(s, refresh = false) {
       stat('Collateral', formatUnits(t.coll, 18).slice(0, 10) + ' BTC', (t.collUsd ? '≈ $' + fmt2(t.collUsd, 18) : '') + pendingColl) +
       stat('Debt', fmt2(t.debt, 18) + ' MUSD', `principal ${fmt2(t.principal, 18)} + interest ${formatUnits(t.interest, 18).slice(0, 8)} · ${(t.rateBp / 100).toFixed(2)}% a year${pendingDebt}`);
     if (t.icr) {
-      html += stat('Collateral ratio', r.icrPct.toFixed(2) + '%', r.liqPrice
-        ? `liquidation below 110% · at BTC ≈ $${esc(r.liqPrice)}, ${r.fallPct.toFixed(1)}% below now`
-        : `liquidation below 110% · BTC would have to fall ${r.fallPct.toFixed(1)}%`);
+      html += stat('Collateral ratio', ratioPct(t.icr) + '%', t.icr < MCR
+        ? `<b class="out">below the 110% minimum: this Trove can be liquidated now</b>${r.liqPrice ? ` · back to 110% at BTC ≈ $${esc(r.liqPrice)}, or with more collateral` : ''}`
+        : r.liqPrice
+          ? `liquidation below 110% · at BTC ≈ $${esc(r.liqPrice)}, ${r.fallPct.toFixed(1)}% below now`
+          : `liquidation below 110% · BTC would have to fall ${r.fallPct.toFixed(1)}%`);
     }
     $('troveStats').innerHTML = html;
     $('troveSystem').innerHTML = t.tcr === undefined ? '' : t.recoveryMode
@@ -277,6 +287,13 @@ async function renderPool(s, hasTrove = false, refresh = false) {
         stat('Pending BTC gain', formatUnits(p.collateralGain, 18).slice(0, 12) + ' BTC', 'from liquidated Troves')
       : '<div class="muted">No Stability Pool deposit for this account yet.</div>';
     $('spWithdrawBtn').disabled = !p || p.deposit === 0n;
+    $('poolSystem').innerHTML = '';
+    if (p && p.deposit > 0n) {
+      // Tell a depositor up front when the protocol is refusing withdrawals; the button re-checks before sending.
+      checkStabilityPoolWithdrawal(rpcFor(s.chainId), NETWORKS[s.chainId]).then((sp) => {
+        if (sp && !sp.ok) $('poolSystem').innerHTML = notice('warn', `<b>Withdrawals are paused right now.</b> Mezo's Stability Pool refuses them while any Trove is below the 110% minimum collateral ratio, and Trove ${addrLink(sp.lowestTrove, NETWORKS[s.chainId])} is at ${ratioPct(sp.icr)}%. Deposits still work. Withdrawing is possible again once that Trove is liquidated or topped up.`);
+      }).catch(() => { /* the button runs the same check and reports the error */ });
+    }
     box.classList.remove('hidden');
   } catch (_) { /* a Stability Pool panel is optional */ }
 }
@@ -296,10 +313,19 @@ function updateTrovePreview() {
   const parts = [];
   if (repay) parts.push(`repaying ${esc(formatUnits(repay, 18))} MUSD`);
   if (addColl) parts.push(`adding ${esc(formatUnits(addColl, 18))} BTC`);
-  el.innerHTML = `After ${parts.join(' and ')}: debt ${fmt2(plan.newDebt, 18)} MUSD` +
-    (plan.newIcr ? `, collateral ratio ${(Number(plan.newIcr) / 1e16).toFixed(2)}%` : '') +
-    (plan.newLiquidationPrice ? `, liquidation at BTC ≈ $${fmt2(plan.newLiquidationPrice, 18)}` : '') +
-    '. Each button sends its own transaction.';
+  const after = `After ${parts.join(' and ')}: debt ${fmt2(plan.newDebt, 18)} MUSD` +
+    (plan.newIcr ? `, new collateral ratio <b>${ratioPct(plan.newIcr)}%</b> (Mezo's minimum is 110%)` : '') +
+    (plan.newLiquidationPrice ? `, liquidation at BTC ≈ $${fmt2(plan.newLiquidationPrice, 18)}` : '') + '.';
+  let html = after + ' Each button sends its own transaction.';
+  if (repay && addColl) {
+    // BorrowerOperations checks each transaction against 110% on its own, so the order can matter for a Trove below 110%.
+    const order = troveStepOrder(troveSnap, { repay, addColl });
+    if (order === 'addColl') html += ' Send <b>Add collateral</b> first: on its own, the repayment would leave the ratio below 110% and revert.';
+    else if (order === 'repay') html += ' Send <b>Repay MUSD</b> first: on its own, the top-up would leave the ratio below 110% and revert.';
+    else if (order === null) html = after + notice('warn', 'Each button sends its own transaction, and BorrowerOperations checks each one against the 110% minimum. Neither the repayment nor the top-up reaches 110% on its own, so whichever you send first would revert. Add more collateral.');
+  }
+  if (plan.warnings.length) html += notice('warn', esc(plan.warnings.join(' ')));
+  el.innerHTML = html;
 }
 $('repayAmt').addEventListener('input', updateTrovePreview);
 $('collAmt').addEventListener('input', updateTrovePreview);
@@ -411,6 +437,20 @@ $('spWithdrawBtn').addEventListener('click', () => runAction($('poolActStatus'),
   const pos = await getStabilityPoolPosition(rpcFor(s.chainId), n, walletAccount);
   if (!pos || pos.deposit === 0n) throw new Error('This account has no Stability Pool deposit.');
   if (amount > pos.deposit) throw new Error(`The deposit is ${formatUnits(pos.deposit, 18)} MUSD, less than the amount.`);
+  // StabilityPool.withdrawFromSP reverts while the lowest Trove is below 110% (_requireNoUnderCollateralizedTroves); check first.
+  say('Checking that no Trove is below 110% (the Stability Pool refuses withdrawals while one is)…');
+  let sp;
+  try {
+    sp = await readTwice(() => checkStabilityPoolWithdrawal(rpcFor(s.chainId), n));
+  } catch (e) {
+    const msg = e.shortMessage || e.message || String(e);
+    throw new Error(/stale/i.test(msg)
+      ? 'Not sent: Mezo\'s price feed is stale right now ("PriceFeed: Oracle is stale"), and the Stability Pool reads it for every withdrawal, so the transaction would revert. Try again later.'
+      : `Not sent: could not check the Stability Pool's withdrawal rule (no Trove below 110%) before sending: ${msg}. Try again.`);
+  }
+  if (sp && !sp.ok) {
+    throw new Error(`Not sent: Mezo's Stability Pool refuses withdrawals while any Trove is below the 110% minimum collateral ratio, and Trove ${sp.lowestTrove} is at ${ratioPct(sp.icr)}% now, so the transaction would revert. Your deposit stays in the pool. Try again once that Trove has been liquidated or topped up by its owner.`);
+  }
   say('Confirm the withdrawal in your wallet…');
   return writeWithGas(pub, { account: walletAccount, address: n.stabilityPool, abi: STABILITY_POOL_ABI, functionName: 'withdrawFromSP', args: [amount] });
 }));

@@ -1,5 +1,5 @@
-// Offline unit test of getStabilityPoolPosition and its lender-report section (no network).
-import { getStabilityPoolPosition, buildLenderReport, MEZO_TESTNET, MEZO_MAINNET } from '../docs/engine.js';
+// Offline unit test of getStabilityPoolPosition, the withdrawFromSP pre-check and the lender-report section (no network).
+import { getStabilityPoolPosition, checkStabilityPoolWithdrawal, buildLenderReport, MEZO_TESTNET, MEZO_MAINNET, MCR } from '../docs/engine.js';
 
 let bad = 0;
 const check = (name, ok) => { console.log(ok ? 'PASS' : 'FAIL', name); if (!ok) bad++; };
@@ -37,6 +37,38 @@ check('an empty pool does not divide by zero', (await getStabilityPoolPosition(f
 check('invalid address returns null without calling the RPC', (await getStabilityPoolPosition(fakeRpc({ deposit: 1n, gain: 1n, total: 1n }), MEZO_TESTNET, '0x123')) === null);
 check('a network without a pool configured returns null', (await getStabilityPoolPosition(fakeRpc({ deposit: 1n, gain: 1n, total: 1n }), { ...MEZO_TESTNET, stabilityPool: undefined }, ACCOUNT)) === null);
 check('both networks know their StabilityPool', /^0x[0-9a-fA-F]{40}$/.test(MEZO_TESTNET.stabilityPool) && /^0x[0-9a-fA-F]{40}$/.test(MEZO_MAINNET.stabilityPool));
+
+// withdrawFromSP pre-check: same reads as StabilityPool._requireNoUnderCollateralizedTroves
+// (SortedTroves.getLast, PriceFeed.fetchPrice, TroveManager.getCurrentICR(last, price), ICR >= MCR).
+const LOWEST = '0x00000000000000000000000000000000000000aa';
+function fakeSystemRpc({ last = LOWEST, price = 80_000n * E, icr, stale = false }) {
+  const calls = [];
+  const rpc = async (method, params) => {
+    const { to, data } = params[0];
+    calls.push({ to, data });
+    if (data === '0x4d622831') return '0x' + last.slice(2).padStart(64, '0');                // SortedTroves.getLast()
+    if (data === '0x0fdb11cf') { if (stale) throw new Error('execution reverted: PriceFeed: Oracle is stale.'); return word(price); }
+    if (data.startsWith('0xd293c710')) return word(icr);                                     // TroveManager.getCurrentICR(address,uint256)
+    throw new Error('unexpected selector ' + data + ' to ' + to);
+  };
+  rpc.calls = calls;
+  return rpc;
+}
+const hold = fakeSystemRpc({ icr: 109n * E / 100n });
+const blocked = await checkStabilityPoolWithdrawal(hold, MEZO_MAINNET);
+check('a lowest Trove at 109% blocks the withdrawal and is named', blocked.ok === false && blocked.lowestTrove === LOWEST && blocked.icr === 109n * E / 100n);
+check('reads go to SortedTroves, PriceFeed and TroveManager of that network',
+  hold.calls[0].to === MEZO_MAINNET.sortedTroves && hold.calls[1].to === MEZO_MAINNET.priceFeed && hold.calls[2].to === MEZO_MAINNET.troveManager);
+check('getCurrentICR gets the lowest Trove and the fetched price as arguments',
+  hold.calls[2].data === '0xd293c710' + LOWEST.slice(2).padStart(64, '0') + (80_000n * E).toString(16).padStart(64, '0'));
+check('exactly 110% is allowed (the contract requires ICR >= MCR)', (await checkStabilityPoolWithdrawal(fakeSystemRpc({ icr: MCR }), MEZO_TESTNET)).ok === true);
+check('one unit below 110% is refused', (await checkStabilityPoolWithdrawal(fakeSystemRpc({ icr: MCR - 1n }), MEZO_TESTNET)).ok === false);
+const empty = fakeSystemRpc({ last: '0x0000000000000000000000000000000000000000', icr: 0n });
+check('no Troves at all: allowed, without reading the price', (await checkStabilityPoolWithdrawal(empty, MEZO_TESTNET)).ok === true && empty.calls.length === 1);
+let staleErr = '';
+try { await checkStabilityPoolWithdrawal(fakeSystemRpc({ stale: true, icr: 2n * E }), MEZO_TESTNET); } catch (e) { staleErr = e.message; }
+check('a stale price feed (which also makes the withdrawal revert) is passed on as an error', /stale/i.test(staleErr));
+check('a network without Trove contracts returns null', (await checkStabilityPoolWithdrawal(fakeSystemRpc({ icr: 0n }), { ...MEZO_TESTNET, sortedTroves: undefined })) === null);
 
 // report section
 const summary = { chainId: 31611, account: ACCOUNT, token: MEZO_TESTNET.tokens.MUSD.address, symbol: 'MUSD', decimals: 18, fromBlock: 1, toBlock: 2, count: 0,

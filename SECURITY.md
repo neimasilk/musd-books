@@ -71,6 +71,15 @@ MUSD Books adds no contract in between and never holds funds.
 - Amounts are checked against the same rules the protocol enforces (net debt stays at or above `minNetDebt`, a
   repayment never exceeds debt minus the 200 MUSD gas compensation, wallet balances, deposit size), so the user sees
   the reason instead of a reverted transaction. The protocol still enforces them.
+- The 110% rule (added 25 Nov 2026 after the Wave 2 review). The repay and add-collateral preview shows the Trove's
+  new collateral ratio, computed like `BorrowerOperations._adjustTrove` (new collateral x `PriceFeed.fetchPrice()` /
+  new debt). In Normal Mode the contract rejects any change that leaves the ratio below `MCR` (110%), even a repayment
+  or a top-up, so the app refuses it and names the top-up that would reach 110%. In Recovery Mode the contract lets a
+  pure repayment or top-up through, so the app only warns that the Trove can still be liquidated.
+- `withdrawFromSP` pre-check (same date). Mezo's `StabilityPool` refuses a withdrawal while the last Trove in
+  `SortedTroves` is below 110% (`_requireNoUnderCollateralizedTroves`). Before asking the wallet, the app reads the same
+  three values (`SortedTroves.getLast`, `PriceFeed.fetchPrice`, `TroveManager.getCurrentICR`) and explains the pause
+  instead of sending a transaction that would revert. Constants and rules were checked against the mezo-org/musd source.
 - The sorted-list hints come from Mezo's `HintHelpers` and `SortedTroves`; if that lookup fails the app sends zero hints,
   which are valid and only cost more gas.
 - Tested end to end on Mezo Testnet with a scripted wallet and checked onchain after each call

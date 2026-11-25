@@ -417,22 +417,33 @@ export function troveRisk(t) {
   return out;
 }
 
-/** MUSD protocol constants (LiquityBase): minimum collateral ratio, critical system ratio, gas compensation. */
+/**
+ * MUSD protocol constants, as in mezo-org/musd solidity/contracts/dependencies/LiquityBase.sol
+ * (MCR = 1.1e18, CCR = 1.5e18, MUSD_GAS_COMPENSATION = 200e18): minimum collateral ratio, critical system ratio, gas compensation.
+ */
 export const MCR = 11n * 10n ** 17n;           // 110%
 export const CCR = 15n * 10n ** 17n;           // 150%
 export const GAS_COMPENSATION = 200n * E18;   // 200 MUSD reserved at opening, returned on close
 export const MIN_NET_DEBT = 1800n * E18;      // BorrowerOperations.minNetDebt at deployment
 
+/** A ratio (1e18 = 100%) as a percentage with two decimals, rounded down so a value just under 110% never shows as 110.00%. */
+export const ratioPct = (r) => (Number(r / 10n ** 14n) / 100).toFixed(2);
+
 /**
- * Preview of a Trove change made from inside MUSD Books (repay MUSD and/or add BTC collateral), using the same rules
+ * Preview of ONE Trove transaction made from inside MUSD Books (repay MUSD and/or add BTC collateral), using the same rules
  * BorrowerOperations enforces. Returns the new amounts, the new collateral ratio, the nominal ratio used for the
- * sorted-list hint, and a list of reasons the transaction would revert (empty when it should go through).
+ * sorted-list hint, a list of reasons the transaction would revert (empty when it should go through) and warnings.
  *   repay: MUSD amount (18 decimals), applied to interest first, then principal (InterestRateManager.updateTroveDebt).
  *   addColl: BTC amount (18 decimals).
  *   musdBalance: the caller's MUSD balance, when known.
+ * The 110% rule: BorrowerOperations._adjustTrove reads PriceFeed.fetchPrice(), computes the Trove's new ICR from its
+ * debt and collateral after the change (_getNewICRFromTroveChange: newColl * price / newDebt), and in Normal Mode
+ * requires newICR >= MCR (_requireValidAdjustmentInNormalMode), even for a pure repayment or top-up. In Recovery Mode a
+ * pure repayment or top-up skips that check (_requireValidAdjustmentInRecoveryMode), so it goes through, but a Trove
+ * left below 110% can still be liquidated. The snapshot's price and mode come from the same PriceFeed and TroveManager.
  */
 export function planTroveChange(snap, { repay = 0n, addColl = 0n, musdBalance = null, minNetDebt = MIN_NET_DEBT } = {}) {
-  const errors = [];
+  const errors = [], warnings = [];
   if (!snap || !snap.active) errors.push('This account has no active Trove.');
   if (repay < 0n || addColl < 0n) errors.push('Amounts must be positive.');
   if (repay === 0n && addColl === 0n) errors.push('Enter an amount.');
@@ -451,7 +462,61 @@ export function planTroveChange(snap, { repay = 0n, addColl = 0n, musdBalance = 
   // TroveManager orders Troves by nominal ratio, collateral * 1e20 / principal (getNominalICR).
   const nicr = newPrincipal > 0n ? (newColl * 10n ** 20n) / newPrincipal : 2n ** 256n - 1n;
   const newLiquidationPrice = newColl > 0n ? (newDebt * MCR) / newColl : null;
-  return { errors, maxRepay, newColl, newPrincipal, newInterest, newDebt, newIcr, nicr, newLiquidationPrice };
+  const belowMcr = newIcr !== null && newIcr < MCR;
+  // Normal Mode is assumed when the mode could not be read: that is the stricter rule.
+  const mcrBlocked = belowMcr && !(snap && snap.recoveryMode === true);
+  if (snap && snap.active && (repay > 0n || addColl > 0n)) {
+    if (!snap.price) {
+      warnings.push('The BTC price could not be read, so the new collateral ratio is not checked here; BorrowerOperations checks it (at least 110% in Normal Mode) when the transaction runs.');
+    } else if (belowMcr) {
+      // The smallest top-up that reaches 110% at the current debt, rounded up to 8 decimals: a separate "Add collateral"
+      // transaction is checked against the debt as it is now.
+      const need = (snap.debt * MCR + snap.price - 1n) / snap.price - snap.coll;
+      const step = 10n ** 10n;
+      const hint = need > 0n ? ` A collateral top-up of at least ${formatUnits(((need + step - 1n) / step) * step, 18)} BTC reaches 110% on its own.` : '';
+      if (mcrBlocked) {
+        errors.push(`After this change the collateral ratio would be ${ratioPct(newIcr)}%, below Mezo's 110% minimum (MCR). In Normal Mode BorrowerOperations rejects any Trove change that leaves the ratio below 110%, even a repayment or a top-up, so this transaction would revert.${hint}`);
+      } else {
+        warnings.push(`After this change the collateral ratio would still be ${ratioPct(newIcr)}%, below 110%. Mezo is in Recovery Mode, where a repayment or top-up is accepted below 110%, but the Trove can still be liquidated.${hint}`);
+      }
+    }
+  }
+  return { errors, warnings, maxRepay, newColl, newPrincipal, newInterest, newDebt, newIcr, belowMcr, mcrBlocked, nicr, newLiquidationPrice };
+}
+
+/**
+ * The app sends a repayment and a top-up as two separate transactions, and BorrowerOperations applies the 110% check to
+ * each one. When both amounts are entered and the combined result passes, this says which order works:
+ * 'any', 'addColl' (top up first), 'repay' (repay first), or null when neither transaction passes on its own.
+ * The second transaction always ends at the combined result, so only the first one can fail the check.
+ */
+export function troveStepOrder(snap, { repay = 0n, addColl = 0n } = {}) {
+  const collFirst = !planTroveChange(snap, { addColl }).mcrBlocked;
+  const repayFirst = !planTroveChange(snap, { repay }).mcrBlocked;
+  if (collFirst && repayFirst) return 'any';
+  if (collFirst) return 'addColl';
+  if (repayFirst) return 'repay';
+  return null;
+}
+
+/**
+ * Pre-check for StabilityPool.withdrawFromSP. Mezo's StabilityPool (mezo-org/musd StabilityPool.sol) runs
+ * _requireNoUnderCollateralizedTroves for any non-zero withdrawal: it takes the last Trove in SortedTroves (the lowest
+ * nominal ratio), reads its ICR with TroveManager.getCurrentICR at PriceFeed.fetchPrice(), and reverts with
+ * "Cannot withdraw while there are troves with ICR < MCR" unless ICR >= MCR. This reads the same three values.
+ * Returns { ok, lowestTrove, icr, price }, or null when the network has no Trove contracts configured.
+ * A stale price feed makes fetchPrice (and so the withdrawal itself) revert; that error is passed on to the caller.
+ *   SortedTroves.getLast() = 0x4d622831, PriceFeed.fetchPrice() = 0x0fdb11cf, TroveManager.getCurrentICR(address,uint256) = 0xd293c710
+ */
+export async function checkStabilityPoolWithdrawal(rpc, net) {
+  if (!net.sortedTroves || !net.troveManager || !net.priceFeed) return null;
+  const call = (to, data) => rpc('eth_call', [{ to, data }, 'latest']);
+  const last = '0x' + String(await call(net.sortedTroves, '0x4d622831')).slice(-40).toLowerCase();
+  // An empty list returns the zero address; the contract then reads a Trove with no debt, whose ratio is unlimited.
+  if (last === ZERO) return { ok: true, lowestTrove: null, icr: null, price: null };
+  const price = BigInt(await call(net.priceFeed, '0x0fdb11cf'));
+  const icr = BigInt(await call(net.troveManager, '0xd293c710' + last.slice(2).padStart(64, '0') + price.toString(16).padStart(64, '0')));
+  return { ok: icr >= MCR, lowestTrove: last, icr, price };
 }
 
 /**
