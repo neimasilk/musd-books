@@ -1,5 +1,7 @@
 # Mezo Ignition Program: re-application (after the Buildathon)
 
+**SUBMITTED 25 Nov 2026 ~23:35 WIB** (Typeform LCp2ZIYq showed "Form received!"). The W2 reward (9,716.52 MEZO = US$30) had landed on 24 Nov. The user filled name, email (amien@ubhinus.ac.id), X username and X link, and ticked the terms and submitted. The AI filled the rest: role, Telegram @neimasilk, LinkedIn skipped, 1-5, Bank on Bitcoin, Mainnet, and fields 12-16. Field 12 used the text below plus "After the Wave 2 review it added the 110% collateral-ratio checks the judges asked for." Field 16 added "and on 20 Nov to wait until the rewards were distributed (Wave 2 rewards arrived on 24 Nov)". The judge-feedback fixes (items 2-4) were pushed before submitting, in commits d2413c9, 3ad1724 and 9a73f30. Mezo replies within ~3 weeks, and only if accepted. Do not submit again.
+
 Status 16 Nov 2026: the first application (15 Nov) was **not rejected on merit**. André Coutinho (Executive Director, Supernormal Foundation) replied on 16 Nov at 11:52 UTC:
 
 > Deploying on both Mezo mainnet and testnet with real MUSD integration (permit payments, BorrowerOperations for Trove repay and collateral, Stability Pool deposits) is the kind of application the program looks for. [...] Our policy is to ask Buildathon teams to complete the Buildathon first and then apply, so we can assess the finished product and your standing in the program. Please do re-apply once the Buildathon wraps up.
