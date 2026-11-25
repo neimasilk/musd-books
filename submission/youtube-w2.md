@@ -2,6 +2,12 @@
 
 Uploaded 6 Nov 2026: https://youtu.be/bl1slN8c7cc (channel "Mukhlis Amien", amien@ubhinus.ac.id). File: `submission/video/out3/musdbooks-pitch-w2.mp4` (2:11, built by `submission/video/make_video_w2.py`).
 
+> **Note added 25 Nov 2026.** The description below is the 6 Nov upload text. Since 13 Nov the v2 contracts are live
+> on Mezo mainnet, so "It runs on Mezo Testnet." is out of date. Suggested edit on YouTube (user, optional):
+> replace it with "The demo in this video runs on Mezo Testnet; since 13 Nov 2026 the v2 contracts are also live and
+> verified on Mezo mainnet." and change the contracts line to "StatementRegistry and MusdPay v2 (reentrancy lock,
+> 28 Foundry tests) live and verified on Mezo mainnet; v1 verified on Mezo Testnet."
+
 **Title:** MUSD Books, Mezo Buildathon Wave 2: act on Mezo from a verifiable MUSD statement
 
 **Description:**

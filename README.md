@@ -36,8 +36,8 @@ MUSD Books turns any Mezo address into a bookkeeping-grade statement for MUSD (o
   second time. The panel now shows the right numbers, names the redistributed part, shows the liquidation price, and
   states the system mode: in MUSD, Recovery Mode (TCR below 150%) does not move the 110% liquidation line, it blocks
   collateral withdrawals and limits new borrowing. Offline tests pin both (`node test/trove.test.mjs`).
-- **Contracts verified** on the Mezo Testnet explorer, and **version 2** of both contracts (reentrancy lock on
-  payments, overflow-free pagination). See [SECURITY.md](SECURITY.md).
+- **Version 2** of both contracts (reentrancy lock on payments, overflow-free pagination), live and verified on Mezo
+  mainnet since 13 Nov 2026; the testnet deployment (version 1, same addresses) is verified too. See [SECURITY.md](SECURITY.md).
 - **On Mezo mainnet (13 Nov 2026).** The v2 contracts are deployed and verified on explorer.mezo.org (addresses under
   Deployments). The first real mainnet statement is the builder's own Wave 1 reward: MEZO to MUSD on Tigris, then
   bridged out through Wormhole NTT. It has 6 transfers, is fully reconciled with 0 unexplained, and is anchored

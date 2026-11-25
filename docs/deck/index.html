@@ -33,7 +33,7 @@
   <div class="brand"><img src="../assets/icon-256.png" alt="logo" /><div class="muted">Mezo Buildathon · Wave 1 · Track 2: Access and Distribution</div></div>
   <h1>MUSD Books</h1>
   <p class="big">Verifiable books for MUSD: statements, invoice references and onchain proof.</p>
-  <p class="muted">Live on Mezo Testnet · open source (MIT) · <a href="https://neimasilk.github.io/musd-books/">neimasilk.github.io/musd-books</a></p>
+  <p class="muted">Live on Mezo mainnet (v2 contracts, since 13 Nov 2026) and Mezo Testnet · open source (MIT) · <a href="https://neimasilk.github.io/musd-books/">neimasilk.github.io/musd-books</a></p>
 </section>
 
 <section>
@@ -77,12 +77,13 @@
     <li><b>Real Trove flows</b>: <code>openTrove</code>, <code>withdrawMUSD</code>, <code>repayMUSD</code> appear as <code>mint</code> and <code>burn</code> rows, with Mezo's own minimum-debt rule respected. A live <b>Trove panel</b> (collateral, debt, interest, collateral ratio) is read from <code>TroveManager</code> and the price feed.</li>
     <li><b>Stability Pool</b>: the live position (deposit after liquidation losses, share of the pool, pending BTC gain from liquidated Troves) is read from the <code>StabilityPool</code> contract and added to the lender report. Validated with a real testnet deposit.</li>
     <li><b>Any ERC-20</b>, so MEZO and Mezo-bridged tokens work too.</li>
-    <li><b>Mainnet-ready reading</b>: the same engine already reconciles real mainnet MUSD accounts with zero difference.</li>
+    <li><b>On mainnet</b>: the v2 contracts are live and verified on Mezo mainnet (13 Nov 2026), and the same engine reconciles real mainnet MUSD accounts with zero difference.</li>
   </ul>
 </section>
 
 <section>
-  <h2>Live on Mezo Testnet</h2>
+  <h2>Live on Mezo mainnet and testnet</h2>
+  <p class="muted">The numbers below are the testnet demo. The same contract addresses run v2 on Mezo mainnet (verified on explorer.mezo.org, 13 Nov 2026) and v1 on testnet.</p>
   <div class="grid">
     <div class="card"><div class="num">2,000</div>MUSD borrowed from a real Trove</div>
     <div class="card"><div class="num">150</div>MUSD repaid (burned)</div>
@@ -91,7 +92,7 @@
     <div class="card"><div class="num">2×</div>the store's statement anchored (store + accountant)</div>
   </div>
   <p class="mono">StatementRegistry 0x431785e21f9224c53aa37108d14cfa865279d23c<br/>MusdPay 0x5fa72a1821254a49d7c0af692115a4dabe81921a</p>
-  <p><a href="https://neimasilk.github.io/musd-books/?account=0x21F5ae9d165a7E0EFDaf17A85c225713199eC439&from=16192210&to=16192312&net=testnet">Open the demo store's statement</a> · <a href="https://github.com/neimasilk/musd-books">Source code</a></p>
+  <p><a href="https://neimasilk.github.io/musd-books/?account=0x21F5ae9d165a7E0EFDaf17A85c225713199eC439&from=16192210&to=16192312&net=testnet">Open the demo store's statement</a> · <a href="https://neimasilk.github.io/musd-books/?account=0x0428b16c99eff57268e69e5eb93aacce18711ba5&amp;from=13141300&amp;to=13141700&amp;net=mainnet&amp;expect=0x6ae6126d54386e2040f7ac190bd005fca9f3583f419ad7c961d2f32afc787586">Re-derive the first real mainnet statement</a> · <a href="https://github.com/neimasilk/musd-books">Source code</a></p>
 </section>
 
 <section>
@@ -125,7 +126,7 @@
     <div class="card"><b>Stability Pool.</b> Deposit or withdraw MUSD (<code>provideToSP</code> / <code>withdrawFromSP</code>) from the same page, with approval handled when needed.</div>
     <div class="card"><b>Guard rails.</b> The preview refuses what the protocol would reject: net debt below the minimum, repaying more than debt minus gas compensation, the wrong wallet, a low balance. Nothing reaches the wallet.</div>
     <div class="card"><b>Trove panel fixed.</b> Pending redistribution rewards are no longer counted twice. The panel shows the liquidation price, the system TCR and the mode. Recovery Mode keeps the 110% line; it blocks collateral withdrawals and limits new debt.</div>
-    <div class="card"><b>Verified and hardened.</b> <code>StatementRegistry</code> and <code>MusdPay</code> are verified on the Mezo Testnet explorer. Version 2 adds a reentrancy lock and overflow-free pagination; 28 Foundry tests pass.</div>
+    <div class="card"><b>Verified and hardened.</b> Version 2 of <code>StatementRegistry</code> and <code>MusdPay</code> adds a reentrancy lock and overflow-free pagination; 28 Foundry tests pass. It is live and verified on Mezo mainnet since 13 Nov 2026; the testnet deployment (v1) is verified too.</div>
     <div class="card"><b>Tested onchain.</b> A scripted wallet drives the real page on Mezo Testnet: repay, add collateral, deposit and withdraw, each checked onchain afterwards (18 checks), plus 24 offline Trove tests.</div>
   </div>
 </section>
@@ -137,8 +138,8 @@
     <div class="card"><b>Accountant workspace.</b> Batch monthly statements and co-attestations for many client addresses, branded PDF, reminders. Priced per client per month, in MUSD.</div>
     <div class="card"><b>Merchant tooling.</b> Hosted invoice pages, payment webhooks and exports to local bookkeeping software. Monthly, in MUSD.</div>
     <div class="card"><b>Paid through MusdPay.</b> Our own revenue appears on a verifiable MUSD Books statement.</div>
-    <div class="card"><b>Status today.</b> Mezo Testnet only. No outside accountant or merchant has used it yet; every flow was run end to end by us.</div>
-    <div class="card"><b>Next.</b> December 2026: a first outside bookkeeper piloting the workspace. Q1 2027: merchant webhooks and exports, MEZO statements beside MUSD, mainnet deployment of version 2.</div>
+    <div class="card"><b>Status today.</b> Version 2 live on Mezo mainnet since 13 Nov 2026, with the first real statement anchored there; the testnet demo stays up. No outside accountant or merchant has used it yet; every flow was run end to end by us.</div>
+    <div class="card"><b>Next.</b> December 2026: a first outside bookkeeper piloting the workspace. Q1 2027: merchant webhooks and exports, MEZO statements beside MUSD.</div>
   </div>
 </section>
 

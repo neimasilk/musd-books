@@ -1,5 +1,11 @@
 # AKINDO Wave 2 submission: MUSD Books (draft, copy and paste)
 
+> **Superseded on mainnet status (note added 25 Nov 2026).** This file records the text as submitted on 7 Nov, when
+> the plan was testnet only. Since 13 Nov 2026 the v2 contracts are live and verified on Mezo mainnet (chain 31612),
+> and the first real mainnet statement is anchored there. See the README "Deployments" table,
+> `akindo-wave2-addendum.md` and `akindo-product-description-2026-11-13.md`. The lines below that say "testnet only",
+> "deferred" or "v2 is the version for mainnet" are history, not the current status.
+
 Status of this draft (3 Nov 2026): items 1-4 are live and tested. Decided 3 Nov: no mainnet deployment in Wave 2
 (getting BTC gas onto Mezo mainnet costs more in Ethereum fees than it is worth now; testnet is accepted by the rules).
 Decided 4 Nov: no outside user is claimed (the user will not ask students or colleagues); the "Real use" line says so plainly.
